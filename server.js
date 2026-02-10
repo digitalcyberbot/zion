@@ -2,21 +2,21 @@ const express = require('express');
 const app = express();
 const http = require('http').createServer(app);
 const io = require('socket.io')(http, {
-    maxHttpBufferSize: 1e7,
+    maxHttpBufferSize: 1e8,
     cors: { origin: "*" }
 });
 
 app.use(express.static(__dirname));
 
 let users = {};
-let pinnedMessage = null; 
+let pinnedMessages = []; 
+let chatHistory = []; 
 
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
-    // 1. Setup User
     users[socket.id] = {
-        username: "Soul", // Default name until they log in
+        username: "Soul",
         color: '#' + Math.floor(Math.random()*16777215).toString(16),
         x: (Math.random() * 60) - 30,
         y: (Math.random() * 20) + 5,
@@ -24,68 +24,99 @@ io.on('connection', (socket) => {
     };
 
     socket.emit('updateUsers', users);
-    if (pinnedMessage) socket.emit('updatePinned', pinnedMessage);
+    socket.emit('updatePinned', pinnedMessages);
+    socket.emit('history', chatHistory);
 
-    // 3. Join
     socket.on('join', (username) => {
         if(users[socket.id]) {
             users[socket.id].username = username;
-            // Broadcast the new name to EVERYONE immediately so spheres update
             io.emit('updateUsers', users);
-            io.emit('chatMessage', {
-                user: 'SYSTEM',
+            
+            const sysMsg = {
+                user: 'System',
                 text: `${username} entered Zion`,
                 type: 'bot',
-                msgId: Date.now()
-            });
+                msgId: Date.now() + Math.random()
+            };
+            chatHistory.push(sysMsg);
+            if(chatHistory.length > 50) chatHistory.shift();
+            io.emit('chatMessage', sysMsg);
         }
     });
 
-    // 4. Chat
     socket.on('chatMessage', (data) => {
         const user = users[socket.id];
         if (user && user.username) {
-            io.emit('chatMessage', {
+            const newMsg = {
                 user: user.username,
                 text: data.text || null,
-                file: data.file || null,
+                files: data.files || [],
                 replyTo: data.replyTo || null,
                 type: 'user',
                 id: socket.id,
-                msgId: Date.now()
-            });
+                msgId: Date.now() + Math.random()
+            };
+            
+            chatHistory.push(newMsg);
+            if(chatHistory.length > 50) chatHistory.shift();
+
+            io.emit('chatMessage', newMsg);
         }
     });
 
-    // 5. Pin
+    socket.on('typing', () => {
+        const user = users[socket.id];
+        if(user && user.username !== "Soul") {
+            socket.broadcast.emit('userTyping', user.username);
+        }
+    });
+
+    socket.on('stopTyping', () => {
+        const user = users[socket.id];
+        if(user) socket.broadcast.emit('userStoppedTyping', user.username);
+    });
+
     socket.on('pinMessage', (msgData) => {
-        pinnedMessage = msgData;
-        io.emit('updatePinned', pinnedMessage);
+        const exists = pinnedMessages.find(m => m.msgId === msgData.msgId);
+        const user = users[socket.id];
+        
+        if(!exists && user) {
+            pinnedMessages.push(msgData);
+            if(pinnedMessages.length > 50) pinnedMessages.shift();
+            
+            io.emit('updatePinned', pinnedMessages);
+            
+            const sysMsg = {
+                user: 'System',
+                text: `${user.username} pinned a message`,
+                type: 'bot',
+                msgId: Date.now() + Math.random()
+            };
+            chatHistory.push(sysMsg);
+            io.emit('chatMessage', sysMsg);
+        }
     });
 
-    // 6. Unpin
-    socket.on('unpinMessage', () => {
-        pinnedMessage = null;
-        io.emit('updatePinned', null);
+    socket.on('unpinMessage', (msgId) => {
+        pinnedMessages = pinnedMessages.filter(m => m.msgId !== msgId);
+        io.emit('updatePinned', pinnedMessages);
     });
 
-    // 7. Disconnect
     socket.on('disconnect', () => {
         if (users[socket.id]) {
             const name = users[socket.id].username;
             delete users[socket.id];
             io.emit('updateUsers', users);
-            io.emit('chatMessage', { 
-                user: 'SYSTEM', 
-                text: `${name} left Zion`, 
-                type: 'bot', 
-                msgId: Date.now() 
-            });
+            
+            const sysMsg = { user: 'System', text: `${name} left Zion`, type: 'bot', msgId: Date.now() };
+            chatHistory.push(sysMsg);
+            if(chatHistory.length > 50) chatHistory.shift();
+            io.emit('chatMessage', sysMsg);
         }
     });
 });
 
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, () => {
-    console.log(`Zion Server running on port ${PORT}`);
+    console.log(`Server running on port ${PORT}`);
 });
