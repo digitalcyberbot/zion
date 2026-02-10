@@ -41,6 +41,25 @@
             font-weight: bold; font-size: 1.2rem; cursor: pointer; border-radius: 30px; 
         }
 
+        /* 3D Tooltip (Sleek Apple Style) */
+        #tooltip {
+            position: absolute; 
+            background: rgba(40, 40, 40, 0.85); 
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            color: white; 
+            padding: 6px 12px; 
+            border-radius: 8px; 
+            pointer-events: none; 
+            font-size: 0.85rem; 
+            font-weight: 500;
+            display: none; 
+            z-index: 50; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: opacity 0.1s;
+        }
+
         /* Chat UI */
         .app-layout { position: relative; height: 100vh; width: 100vw; pointer-events: none; }
         
@@ -143,6 +162,8 @@
 </head>
 <body>
 
+    <div id="tooltip"></div>
+
     <div id="context-menu">
         <div class="ctx-item" id="ctx-reply">Reply</div>
         <div class="ctx-item" id="ctx-pin">Pin Message</div>
@@ -179,7 +200,7 @@
                 <form class="input-area" id="chat-form">
                     <button type="button" class="icon-btn" id="upload-btn">＋</button>
                     <input type="file" id="file-input" hidden accept="image/*">
-                    <input id="msg-input" placeholder="iMessage" autocomplete="off">
+                    <input id="msg-input" placeholder="Message" autocomplete="off">
                     <button type="submit" class="icon-btn send-btn">↑</button>
                 </form>
             </div>
@@ -190,8 +211,6 @@
         import * as THREE from 'three';
 
         // --- 1. SOCKET ---
-        // io() with empty arguments automatically connects to the server hosting the file
-        // This is crucial for deployment!
         const socket = io(); 
 
         const statusDot = document.getElementById('status-dot');
@@ -286,6 +305,21 @@
         const cloudsGroup = new THREE.Group(); scene.add(cloudsGroup);
         const userMeshes = {};
 
+        // RAYCASTER SETUP
+        const raycaster = new THREE.Raycaster();
+        const pointer = new THREE.Vector2();
+        const tooltip = document.getElementById('tooltip');
+
+        window.addEventListener('mousemove', (event) => {
+            // Calculate mouse position in normalized device coordinates (-1 to +1)
+            pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+            pointer.y = - (event.clientY / window.innerHeight) * 2 + 1;
+            
+            // Move tooltip to mouse pos
+            tooltip.style.left = (event.clientX + 15) + 'px';
+            tooltip.style.top = (event.clientY + 15) + 'px';
+        });
+
         function createClouds(count) { 
             while(cloudsGroup.children.length > 0) cloudsGroup.remove(cloudsGroup.children[0]); 
             const cloudGeo = new THREE.SphereGeometry(6, 8, 8); 
@@ -308,12 +342,20 @@
         
         function updateUserSpheres(users) {
             Object.keys(users).forEach(id => {
+                const u = users[id];
+                // Create if not exists
                 if (!userMeshes[id]) {
-                    const u = users[id];
                     const mesh = new THREE.Mesh(new THREE.SphereGeometry(2, 16, 16), new THREE.MeshStandardMaterial({ color: u.color, emissive: u.color, emissiveIntensity: 0.5 }));
-                    mesh.position.set(u.x, u.y, u.z); scene.add(mesh); userMeshes[id] = mesh;
+                    mesh.position.set(u.x, u.y, u.z); 
+                    scene.add(mesh); 
+                    userMeshes[id] = mesh;
                 }
+                
+                // --- CRITICAL FIX: ALWAYS UPDATE USERDATA SO NAME REFRESHES ---
+                userMeshes[id].userData = { username: u.username };
             });
+            
+            // Remove disconnected
             Object.keys(userMeshes).forEach(id => { if (!users[id]) { scene.remove(userMeshes[id]); delete userMeshes[id]; } });
         }
 
@@ -322,6 +364,22 @@
             terrain.position.z = (Math.sin(time * 0.1) * 10) - 10; 
             Object.values(userMeshes).forEach((mesh, i) => { mesh.position.y += Math.sin(time * 2 + i) * 0.05; });
             cloudsGroup.children.forEach(c => { c.position.x += 0.05; if(c.position.x>100) c.position.x=-100; }); 
+            
+            // RAYCASTING LOGIC
+            raycaster.setFromCamera(pointer, camera);
+            const intersects = raycaster.intersectObjects(Object.values(userMeshes));
+            
+            if (intersects.length > 0) {
+                const target = intersects[0].object;
+                const name = target.userData.username || 'User';
+                tooltip.innerText = name;
+                tooltip.style.display = 'block';
+                document.body.style.cursor = 'pointer';
+            } else {
+                tooltip.style.display = 'none';
+                document.body.style.cursor = 'default';
+            }
+
             renderer.render(scene, camera); 
         }
         animate();
@@ -385,5 +443,4 @@
         window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
     </script>
 </body>
-
 </html>
