@@ -2,7 +2,7 @@ const express = require('express');
 const app = express();
 const http = require('http').createServer(app);
 const io = require('socket.io')(http, {
-    maxHttpBufferSize: 1e7, // 10MB limit for images
+    maxHttpBufferSize: 1e7,
     cors: { origin: "*" }
 });
 
@@ -14,36 +14,34 @@ let pinnedMessage = null;
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
-    // 1. Setup User (Random Color/Position)
+    // 1. Setup User
     users[socket.id] = {
-        username: "Soul",
+        username: "Soul", // Default name until they log in
         color: '#' + Math.floor(Math.random()*16777215).toString(16),
         x: (Math.random() * 60) - 30,
         y: (Math.random() * 20) + 5,
         z: (Math.random() * 30) - 20
     };
 
-    // 2. Send current state
     socket.emit('updateUsers', users);
-    if (pinnedMessage) {
-        socket.emit('updatePinned', pinnedMessage);
-    }
+    if (pinnedMessage) socket.emit('updatePinned', pinnedMessage);
 
-    // 3. Handle Join
+    // 3. Join
     socket.on('join', (username) => {
         if(users[socket.id]) {
             users[socket.id].username = username;
+            // Broadcast the new name to EVERYONE immediately so spheres update
             io.emit('updateUsers', users);
             io.emit('chatMessage', {
                 user: 'SYSTEM',
-                text: `${username} ENTERED THE REALM`,
+                text: `${username} entered Zion`,
                 type: 'bot',
                 msgId: Date.now()
             });
         }
     });
 
-    // 4. Handle Chat
+    // 4. Chat
     socket.on('chatMessage', (data) => {
         const user = users[socket.id];
         if (user && user.username) {
@@ -59,19 +57,19 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 5. Handle Pin
+    // 5. Pin
     socket.on('pinMessage', (msgData) => {
         pinnedMessage = msgData;
         io.emit('updatePinned', pinnedMessage);
     });
 
-    // 6. Handle Unpin
+    // 6. Unpin
     socket.on('unpinMessage', () => {
         pinnedMessage = null;
         io.emit('updatePinned', null);
     });
 
-    // 7. Handle Disconnect
+    // 7. Disconnect
     socket.on('disconnect', () => {
         if (users[socket.id]) {
             const name = users[socket.id].username;
@@ -79,9 +77,9 @@ io.on('connection', (socket) => {
             io.emit('updateUsers', users);
             io.emit('chatMessage', { 
                 user: 'SYSTEM', 
-                text: `${name} FADED AWAY`, 
-                type: 'bot',
-                msgId: Date.now()
+                text: `${name} left Zion`, 
+                type: 'bot', 
+                msgId: Date.now() 
             });
         }
     });
@@ -89,5 +87,5 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, () => {
-    console.log(`SERVER RUNNING ON PORT ${PORT}`);
+    console.log(`Zion Server running on port ${PORT}`);
 });
