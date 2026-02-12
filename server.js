@@ -6,10 +6,12 @@ const io = require('socket.io')(http, { maxHttpBufferSize: 1e8, cors: { origin: 
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const dns = require('dns');
+const path = require('path'); // Added path module
 
-try { dns.setServers(['8.8.8.8', '8.8.4.4']); } catch (e) { console.log("DNS Fix applied"); }
+try { dns.setServers(['8.8.8.8', '8.8.4.4']); } catch (e) { console.log("DNS settings skipped"); }
 
-app.use(express.static(__dirname));
+// --- KEY CHANGE: Serve only the 'public' folder ---
+app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
 const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://admin:Maximum2Rumba@zion0.0kybtmc.mongodb.net/?appName=Zion0";
@@ -67,6 +69,11 @@ let localUsers = {};
 let activeUsers = {}; 
 let pinnedMessages = []; 
 let chatHistory = []; 
+
+// Explicit route to ensure index.html serves correctly on root
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 io.on('connection', async (socket) => {
     console.log('User connected:', socket.id);
