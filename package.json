@@ -1,12 +1,26 @@
 {
-  "name": "chat-app",
+  "name": "zion-chat-app",
   "version": "1.0.0",
+  "description": "Zion 3D Chat Application with Socket.io and MongoDB",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.3.1",
     "express": "^4.18.2",
-    "socket.io": "^4.7.4"
-  }
+    "mongoose": "^8.0.3",
+    "socket.io": "^4.7.2"
+  },
+  "engines": {
+    "node": ">=16.x"
+  },
+  "keywords": [
+    "chat",
+    "socket.io",
+    "three.js",
+    "mongodb"
+  ],
+  "author": ""
 }
