@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Zion</title>
-    <link rel="icon" type="image/jpeg" href="image_d33f99.jpg">
+    <link rel="icon" type="image/jpeg" href="image_5ba25e.jpg">
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Rock+Salt&family=Roboto+Mono&family=Orbitron&display=swap" rel="stylesheet">
     <script type="importmap">
@@ -66,10 +66,11 @@
         }
 
         .login-logo {
-            width: 100%;
-            max-width: 150px;
+            width: 100px; /* Adjusted size for better fit */
+            height: 100px;
+            border-radius: 50%; /* Optional: makes the logo circular */
             margin-bottom: 30px;
-            object-fit: contain;
+            object-fit: cover;
         }
 
         .auth-input { 
@@ -119,7 +120,7 @@
         /* APPLE-ESQUE PROFILE MODAL - NO BLUR */
         #profile-modal {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: transparent; /* Changed from blurred bg */
+            background: transparent; 
             z-index: 200; display: none; pointer-events: auto; 
         }
         .profile-card {
@@ -128,8 +129,7 @@
             padding: 30px; 
             border-radius: 24px; color: white;
             
-            /* Apple Glass Style */
-            background: rgba(30, 30, 30, 0.95); /* More opaque since no bg blur */
+            background: rgba(30, 30, 30, 0.95); 
             backdrop-filter: blur(30px); 
             -webkit-backdrop-filter: blur(30px);
             border: 1px solid rgba(255,255,255,0.12);
@@ -190,7 +190,6 @@
         .save-btn { background: white; color: black; border: none; padding: 12px 0; border-radius: 12px; font-weight: 600; cursor: pointer; margin-top: 15px; width: 100%; font-size: 1rem;}
         #reset-pfp-btn { background: rgba(255,59,48,0.2); color: #ff3b30; border: none; padding: 8px 12px; border-radius: 8px; font-size: 0.8rem; cursor: pointer; font-weight: 600;}
         
-        /* LOGOUT BUTTON */
         #logout-btn {
             background: rgba(255, 59, 48, 0.15); color: #ff453a;
             border: 1px solid rgba(255, 59, 48, 0.3);
@@ -319,7 +318,6 @@
         .link-title { font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .link-url { font-size: 0.75rem; color: #aaa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-        /* FIXED: Force Preview Size in Max mode */
         .chat-container.maximized .msg-img, 
         .chat-container.maximized .msg-video, 
         .chat-container.maximized .link-card iframe { 
@@ -420,7 +418,7 @@
 
     <div id="login-overlay">
         <div class="login-card">
-            <img class="login-logo" src="image_d269f5.png" alt="Zion Logo">
+            <img class="login-logo" src="image_5ba25e.jpg" alt="Zion Logo">
             <input id="login-user" class="auth-input" type="text" placeholder="Username" autocomplete="off">
             <input id="login-pass" class="auth-input" type="password" placeholder="Password" autocomplete="off">
             <button id="login-btn">Enter</button>
@@ -492,7 +490,6 @@
         const statusDot = document.getElementById('status-dot');
         const statusText = document.getElementById('status-text');
         
-        // --- HELPER: SOLID COLOR PFP (NO TEXT) ---
         function getDisplayPfp(userOrColor) {
             let color = '#333';
             if (userOrColor && typeof userOrColor === 'object') {
@@ -501,7 +498,7 @@
             } else if (typeof userOrColor === 'string') {
                 color = userOrColor; 
             }
-            if (!/^#[0-9A-F]{6}$/i.test(color)) color = '#007AFF'; // Safe fallback
+            if (!/^#[0-9A-F]{6}$/i.test(color)) color = '#007AFF'; 
             const c = color.replace('#', '%23');
             return `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='${c}'/></svg>`;
         }
@@ -535,7 +532,6 @@
         const chatWindow = document.getElementById('chat-window');
         let lastSenderId = null; let currentGroup = null; let pendingFiles = []; let currentReply = null; 
 
-        // --- WINDOW CONTROLS ---
         window.toggleMinMax = function(action) {
             const chatUi = document.getElementById('chat-ui');
             const minText = document.getElementById('minimized-text');
@@ -551,7 +547,6 @@
             }
         };
 
-        // --- FIXED SEARCH ---
         document.getElementById('search-input').addEventListener('input', (e) => {
             const term = e.target.value.toLowerCase();
             const visibleGroups = Array.from(document.querySelectorAll('.msg-group'));
@@ -807,7 +802,6 @@
         }
 
         function renderHistory(history, myName) {
-            // FIX: HIDE LOADING
             document.getElementById('loading-screen').classList.remove('active');
             
             chatWindow.innerHTML = ''; lastSenderId = null; currentGroup = null; state.dmContacts.clear(); state.unread = {};
@@ -819,14 +813,13 @@
         const loginBtn = document.getElementById('login-btn'); const loginUser = document.getElementById('login-user'); const loginPass = document.getElementById('login-pass'); 
         const loginOverlay = document.getElementById('login-overlay'); const loginError = document.getElementById('login-error'); const chatUi = document.getElementById('chat-ui');
         
-        // --- AUTO LOGIN LOGIC ---
         function attemptAutoLogin() {
             const saved = localStorage.getItem('zion_creds');
             if (saved) {
                 try {
                     const creds = JSON.parse(saved);
                     if (creds.u && creds.p) {
-                        document.getElementById('loading-screen').classList.add('active'); // Show loading
+                        document.getElementById('loading-screen').classList.add('active'); 
                         socket.emit('login', { username: creds.u, password: creds.p });
                         return true;
                     }
@@ -836,7 +829,6 @@
         }
 
         window.addEventListener('load', () => {
-             // Try auto-login on page load
              attemptAutoLogin();
         });
 
@@ -849,12 +841,10 @@
             const username = loginUser.value.trim(); const password = loginPass.value.trim();
             if(!username || !password) return; 
             
-            // SHOW LOADING SCREEN ON LOGIN
             document.getElementById('loading-screen').classList.add('active');
             
             if(socket && socket.connected) { 
                 socket.emit('login', { username, password }); 
-                // Save creds immediately (optimistic) or move this to loginSuccess
                 localStorage.setItem('zion_creds', JSON.stringify({ u: username, p: password }));
             } else alert("Server not connected.");
         });
@@ -907,7 +897,6 @@
                 const newPfp = getDisplayPfp(final); 
                 const hBtn = document.getElementById('header-pfp-btn');
                 hBtn.style.backgroundImage = `url(${newPfp})`;
-                // Fallback for header too
                 const img = new Image(); img.src = newPfp; img.onerror = () => { hBtn.style.backgroundImage = `url(${getDisplayPfp(final.color)})`; };
                 document.documentElement.style.setProperty('--user-color', final.color);
                 socket.emit('updateProfile', final); 
@@ -928,6 +917,17 @@
                 document.documentElement.style.setProperty('--user-color', userData.color); 
                 renderHistory(state.history, userData.username); document.getElementById('login-overlay').style.display = 'none'; document.getElementById('chat-ui').style.display = 'flex'; document.getElementById('top-controls').style.display = 'flex'; 
             });
+
+            // FIX 3: ADDED LOGIN ERROR HANDLER TO STOP SPINNER
+            socket.on('loginError', (msg) => {
+                document.getElementById('loading-screen').classList.remove('active');
+                const errDiv = document.getElementById('login-error');
+                errDiv.style.display = 'block';
+                errDiv.innerText = msg;
+                // Clear the optimistic save
+                localStorage.removeItem('zion_creds');
+            });
+
             socket.on('history', (history) => { state.history = history; if(state.currentUser) renderHistory(state.history, state.currentUser.username); });
             socket.on('updateUsers', (users) => { state.users = users; updateUserSpheres(users); updateDMList(); });
             socket.on('chatMessage', (data) => { const myName = state.currentUser ? state.currentUser.username : ''; addMessageToUI(data, data.user === myName); });
@@ -989,7 +989,6 @@
 
         document.getElementById('chat-form').addEventListener('submit', (e) => { 
             e.preventDefault(); const text = document.getElementById('msg-input').value.trim(); 
-            // FIXED: Attach files and reply context
             if((text || pendingFiles.length > 0) && socket) { 
                 const toUser = state.chatContext === 'public' ? null : state.chatContext; 
                 socket.emit('chatMessage', { text, toUser, files: pendingFiles, replyTo: currentReply }); 
@@ -1000,7 +999,6 @@
             } 
         });
 
-        // --- FIXED: ADDED FILE UPLOAD LISTENERS ---
         document.getElementById('upload-btn').addEventListener('click', () => {
             document.getElementById('file-input').click();
         });
