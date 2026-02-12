@@ -10,235 +10,63 @@
     <script type="importmap">
         { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
     </script>
-
     <style>
-        :root { 
-            --blue-bubble: #007AFF; 
-            --gray-bubble: #262628; 
-            --bg-color: #000000;
-            --glass-bg: rgba(30, 30, 30, 0.75);
-            --border-color: rgba(255,255,255,0.15);
-            --user-color: #007AFF;
-        }
-
-        body { 
-            margin: 0; overflow: hidden; 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-            background: var(--bg-color); color: white; 
-        }
+        :root { --blue-bubble: #007AFF; --gray-bubble: #262628; --bg-color: #000000; --glass-bg: rgba(30, 30, 30, 0.75); --border-color: rgba(255,255,255,0.15); --user-color: #007AFF; }
+        body { margin: 0; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg-color); color: white; }
         #bg-canvas { position: fixed; top: 0; left: 0; z-index: -1; }
-
-        /* LOADING SPINNER */
-        #loading-screen {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(20,20,20,0.9); z-index: 500;
-            display: none; justify-content: center; align-items: center;
-        }
+        #loading-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(20,20,20,0.9); z-index: 500; display: none; justify-content: center; align-items: center; }
         #loading-screen.active { display: flex; }
-        .spinner {
-            width: 40px; height: 40px; border: 4px solid rgba(255, 255, 255, 0.1);
-            border-top: 4px solid var(--user-color); border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
+        .spinner { width: 40px; height: 40px; border: 4px solid rgba(255, 255, 255, 0.1); border-top: 4px solid var(--user-color); border-radius: 50%; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-        /* --- APPLE-ESQUE LOGIN SCREEN --- */
-        #login-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.6); 
-            backdrop-filter: blur(20px); 
-            -webkit-backdrop-filter: blur(20px);
-            z-index: 100;
-            display: flex; justify-content: center; align-items: center; flex-direction: column;
-            transition: opacity 0.5s;
-        }
-        
-        .login-card {
-            background: rgba(40, 40, 40, 0.6);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 24px;
-            padding: 40px;
-            width: 320px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
-        }
-
-        .login-logo {
-            width: 100px; /* Adjusted size for better fit */
-            height: 100px;
-            border-radius: 50%; /* Optional: makes the logo circular */
-            margin-bottom: 30px;
-            object-fit: cover;
-        }
-
-        .auth-input { 
-            background: rgba(120, 120, 120, 0.2);
-            border: none; 
-            border-radius: 12px;
-            color: #fff; 
-            font-size: 1rem; 
-            text-align: center; 
-            outline: none; 
-            margin-bottom: 15px; 
-            width: 100%; 
-            padding: 12px 10px;
-            box-sizing: border-box;
-            transition: background 0.2s;
-        }
+        #login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); z-index: 100; display: flex; justify-content: center; align-items: center; flex-direction: column; transition: opacity 0.5s; }
+        .login-card { background: rgba(40, 40, 40, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 24px; padding: 40px; width: 320px; display: flex; flex-direction: column; align-items: center; box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
+        .login-logo { width: 100px; height: 100px; border-radius: 50%; margin-bottom: 30px; object-fit: cover; }
+        .auth-input { background: rgba(120, 120, 120, 0.2); border: none; border-radius: 12px; color: #fff; font-size: 1rem; text-align: center; outline: none; margin-bottom: 15px; width: 100%; padding: 12px 10px; box-sizing: border-box; transition: background 0.2s; }
         .auth-input:focus { background: rgba(120, 120, 120, 0.4); }
-        .auth-input::placeholder { color: rgba(255,255,255,0.4); }
-
-        #login-btn { 
-            background: #007AFF; 
-            border: none; 
-            padding: 12px 0; 
-            width: 100%;
-            font-weight: 600; 
-            font-size: 1rem; 
-            cursor: pointer; 
-            border-radius: 12px; 
-            margin-top: 10px; 
-            color: white;
-            transition: background 0.2s;
-        }
+        #login-btn { background: #007AFF; border: none; padding: 12px 0; width: 100%; font-weight: 600; font-size: 1rem; cursor: pointer; border-radius: 12px; margin-top: 10px; color: white; transition: background 0.2s; }
         #login-btn:hover { background: #0063CC; }
         #login-error { color: #ff453a; margin-top: 15px; font-weight: 500; font-size: 0.9rem; display: none; }
-
-        /* HEADER */
         #top-controls { position: absolute; top: 20px; right: 20px; z-index: 10; display: flex; gap: 15px; align-items: center;}
-        #header-pfp-btn {
-            width: 42px; height: 42px; border-radius: 50%;
-            background-color: transparent; 
-            background-size: cover; background-position: center;
-            border: 2px solid rgba(255,255,255,0.3); cursor: pointer;
-            transition: transform 0.2s, border-color 0.2s;
-        }
+        #header-pfp-btn { width: 42px; height: 42px; border-radius: 50%; background-color: transparent; background-size: cover; background-position: center; border: 2px solid rgba(255,255,255,0.3); cursor: pointer; transition: transform 0.2s, border-color 0.2s; }
         #header-pfp-btn:hover { transform: scale(1.1); border-color: white; }
-
-        /* APPLE-ESQUE PROFILE MODAL - NO BLUR */
-        #profile-modal {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: transparent; 
-            z-index: 200; display: none; pointer-events: auto; 
-        }
-        .profile-card {
-            position: absolute; right: 20px; bottom: 20px;
-            width: 380px; min-height: 550px; max-height: 80vh;
-            padding: 30px; 
-            border-radius: 24px; color: white;
-            
-            background: rgba(30, 30, 30, 0.95); 
-            backdrop-filter: blur(30px); 
-            -webkit-backdrop-filter: blur(30px);
-            border: 1px solid rgba(255,255,255,0.12);
-            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-            
-            display: flex; flex-direction: column; gap: 10px; 
-            animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-            background-size: cover; background-position: center; 
-            overflow-y: auto; scrollbar-width: none;
-            text-align: left; align-items: flex-start;
-        }
+        #profile-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: transparent; z-index: 200; display: none; pointer-events: auto; }
+        .profile-card { position: absolute; right: 20px; bottom: 20px; width: 380px; min-height: 550px; max-height: 80vh; padding: 30px; border-radius: 24px; color: white; background: rgba(30, 30, 30, 0.95); backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px); border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 20px 50px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: 10px; animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1); background-size: cover; background-position: center; overflow-y: auto; scrollbar-width: none; text-align: left; align-items: flex-start; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         .profile-card.closing { animation: fadeOut 0.2s ease-in forwards; }
         @keyframes fadeOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(20px); } }
-
-        /* PROFILE INPUTS */
-        .profile-input { 
-            background: rgba(120, 120, 120, 0.2); 
-            border: none;
-            color: white; padding: 12px 16px; 
-            border-radius: 12px; width: 100%; 
-            box-sizing: border-box; font-family: inherit; margin-bottom: 12px; 
-            font-size: 1rem; text-align: left; outline: none;
-        }
+        .profile-input { background: rgba(120, 120, 120, 0.2); border: none; color: white; padding: 12px 16px; border-radius: 12px; width: 100%; box-sizing: border-box; font-family: inherit; margin-bottom: 12px; font-size: 1rem; text-align: left; outline: none; }
         .profile-input:focus { background: rgba(120, 120, 120, 0.3); }
-
-        .profile-avatar-large {
-            display: block; width: 100px; height: 100px; border-radius: 50%;
-            background: #333; object-fit: cover; margin-bottom: 10px;
-            border: 3px solid rgba(255,255,255,0.2); 
-        }
+        .profile-avatar-large { display: block; width: 100px; height: 100px; border-radius: 50%; background: #333; object-fit: cover; margin-bottom: 10px; border: 3px solid rgba(255,255,255,0.2); }
         .profile-username { display: block; width: 100%; font-size: 2rem; font-weight: 700; line-height: 1.2; margin-bottom: 5px; }
         .profile-status { display: block; width: 100%; font-size: 1rem; opacity: 0.8; font-style: italic; margin-bottom: 15px; }
-        .profile-bio { 
-            background: rgba(255,255,255,0.05); padding: 16px; border-radius: 12px; 
-            font-size: 0.95rem; line-height: 1.5; white-space: pre-wrap; 
-            width: 100%; box-sizing: border-box; flex: 1; min-height: 100px;
-        }
+        .profile-bio { background: rgba(255,255,255,0.05); padding: 16px; border-radius: 12px; font-size: 0.95rem; line-height: 1.5; white-space: pre-wrap; width: 100%; box-sizing: border-box; flex: 1; min-height: 100px; }
         .profile-meta { font-size: 0.85rem; opacity: 0.6; margin-top: auto; width: 100%; }
-        #p-message-btn {
-            background: var(--user-color); color: white; border: none;
-            padding: 10px 20px; border-radius: 18px; font-weight: 600;
-            cursor: pointer; margin-bottom: 10px; width: 100%; filter: brightness(1.1);
-        }
-        .close-btn { 
-            position: absolute; top: 20px; right: 20px;
-            background: transparent; border: none; color: inherit; 
-            font-size: 1.5rem; cursor: pointer; line-height: 1; z-index: 5; opacity: 0.7;
-        }
+        #p-message-btn { background: var(--user-color); color: white; border: none; padding: 10px 20px; border-radius: 18px; font-weight: 600; cursor: pointer; margin-bottom: 10px; width: 100%; filter: brightness(1.1); }
+        .close-btn { position: absolute; top: 20px; right: 20px; background: transparent; border: none; color: inherit; font-size: 1.5rem; cursor: pointer; line-height: 1; z-index: 5; opacity: 0.7; }
         .close-btn:hover { opacity: 1; }
-
         .profile-tabs { display: flex; gap: 20px; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; width: 100%; justify-content: flex-start;}
         .profile-tab { cursor: pointer; padding: 5px 0; opacity: 0.6; font-size: 0.95rem; font-weight: 500; }
         .profile-tab.active { opacity: 1; border-bottom: 2px solid white; }
         #tab-design, #tab-basic { width: 100%; box-sizing: border-box; }
         .row { display: flex; gap: 10px; align-items: center; width: 100%; margin-bottom: 12px;}
-        
         .save-btn { background: white; color: black; border: none; padding: 12px 0; border-radius: 12px; font-weight: 600; cursor: pointer; margin-top: 15px; width: 100%; font-size: 1rem;}
         #reset-pfp-btn { background: rgba(255,59,48,0.2); color: #ff3b30; border: none; padding: 8px 12px; border-radius: 8px; font-size: 0.8rem; cursor: pointer; font-weight: 600;}
-        
-        #logout-btn {
-            background: rgba(255, 59, 48, 0.15); color: #ff453a;
-            border: 1px solid rgba(255, 59, 48, 0.3);
-            padding: 12px 0; border-radius: 12px;
-            font-weight: 600; cursor: pointer;
-            margin-top: 10px; width: 100%; font-size: 1rem;
-        }
+        #logout-btn { background: rgba(255, 59, 48, 0.15); color: #ff453a; border: 1px solid rgba(255, 59, 48, 0.3); padding: 12px 0; border-radius: 12px; font-weight: 600; cursor: pointer; margin-top: 10px; width: 100%; font-size: 1rem; }
         #logout-btn:hover { background: rgba(255, 59, 48, 0.25); }
-
-        /* Chat UI */
-        .chat-container {
-            position: absolute; bottom: 20px; left: 20px; width: 420px; height: 75vh;
-            pointer-events: auto; display: flex; flex-direction: column;
-            background: var(--glass-bg); backdrop-filter: blur(25px);
-            border-radius: 24px; border: 1px solid var(--border-color);
-            box-shadow: 0 20px 50px rgba(0,0,0,0.6); display: none; overflow: hidden;
-            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-            z-index: 300; 
-        }
-        
+        .chat-container { position: absolute; bottom: 20px; left: 20px; width: 420px; height: 75vh; pointer-events: auto; display: flex; flex-direction: column; background: var(--glass-bg); backdrop-filter: blur(25px); border-radius: 24px; border: 1px solid var(--border-color); box-shadow: 0 20px 50px rgba(0,0,0,0.6); display: none; overflow: hidden; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); z-index: 300; }
         .chat-container.maximized { width: calc(100% - 40px); height: calc(100% - 40px); bottom: 20px; left: 20px; }
         .chat-container.minimized { height: 60px; width: 260px; overflow: hidden; background: rgba(20,20,20,0.95); }
         .chat-container.minimized #minimized-content { display: flex; }
         .chat-container.minimized .chat-header, .chat-container.minimized #chat-window, .chat-container.minimized .input-wrapper, .chat-container.minimized #dm-banner { display: none !important; }
         #minimized-content { display: none; width: 100%; height: 100%; align-items: center; justify-content: space-between; padding: 0 20px; font-weight: bold; cursor: pointer; }
-
         .chat-header { padding: 10px 15px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; height: 50px; box-sizing: border-box; }
         .header-left-group { display: flex; gap: 5px; flex: 1; justify-content: flex-start; } 
         .header-center-group { flex: 2; display: flex; justify-content: center; } 
         .header-right-group { display: flex; gap: 5px; flex: 1; justify-content: flex-end; } 
-
         #search-input { background: rgba(0,0,0,0.3); border: none; color: white; padding: 8px 15px; border-radius: 20px; font-size: 0.9rem; width: 100%; max-width: 250px; box-sizing: border-box; outline: none; text-align: center;}
-        
-        .header-icon-btn { 
-            background: transparent; border: none; color: #ccc; cursor: pointer; 
-            padding: 8px; font-size: 1.2rem; position: relative; width: 30px; text-align: center;
-        }
-        
-        .notification-badge {
-            position: absolute; top: -2px; right: -2px;
-            background: #ff3b30; color: white;
-            border-radius: 50%; padding: 2px 5px;
-            font-size: 0.7rem; font-weight: bold;
-            min-width: 14px; text-align: center;
-            display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.5);
-            animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
+        .header-icon-btn { background: transparent; border: none; color: #ccc; cursor: pointer; padding: 8px; font-size: 1.2rem; position: relative; width: 30px; text-align: center; }
+        .notification-badge { position: absolute; top: -2px; right: -2px; background: #ff3b30; color: white; border-radius: 50%; padding: 2px 5px; font-size: 0.7rem; font-weight: bold; min-width: 14px; text-align: center; display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.5); animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
         @keyframes popIn { from { transform: scale(0); } to { transform: scale(1); } }
-        
         .side-panel { position: absolute; top: 0; right: 0; width: 100%; height: 100%; background: rgba(20, 20, 20, 0.98); backdrop-filter: blur(20px); z-index: 20; transform: translateX(100%); transition: transform 0.3s; display: flex; flex-direction: column; }
         .side-panel.open { transform: translateX(0); }
         .panel-header { padding: 10px 15px; border-bottom: 1px solid var(--border-color); font-weight: bold; display: flex; justify-content: space-between; align-items: center; height: 50px; box-sizing: border-box; }
@@ -247,48 +75,28 @@
         .pinned-item:hover { background: rgba(255,255,255,0.1); transform: translateX(3px); }
         .pinned-header { display: flex; justify-content: space-between; font-size: 0.75rem; color: #888; }
         .pinned-text { color: #ddd; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
         .dm-item { background: rgba(255,255,255,0.05); border-radius: 12px; padding: 12px; margin-bottom: 8px; font-size: 0.9rem; cursor: pointer; display: flex; align-items: center;}
         .dm-item:hover { background: rgba(255,255,255,0.1); }
         .dm-item-pfp { width: 30px; height: 30px; border-radius: 50%; margin-right: 10px; background: transparent; object-fit: cover;}
         #dm-banner { background: rgba(0,0,0,0.6); padding: 8px; text-align: center; font-weight: bold; font-size: 0.9rem; cursor: pointer; display: none; border-bottom: 1px solid rgba(255,255,255,0.1); }
-
         #chat-window { flex: 1; overflow-y: auto; display: flex; flex-direction: column; padding: 15px; gap: 4px; scrollbar-width: none; position: relative;}
-        
-        #new-msg-notification {
-            position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%);
-            background: var(--user-color); color: white; padding: 8px 16px;
-            border-radius: 20px; font-size: 0.85rem; font-weight: bold; cursor: pointer;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5); z-index: 15; display: none;
-            animation: bounceUp 0.3s ease-out; border: 1px solid rgba(255,255,255,0.2);
-        }
+        #new-msg-notification { position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); background: var(--user-color); color: white; padding: 8px 16px; border-radius: 20px; font-size: 0.85rem; font-weight: bold; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.5); z-index: 15; display: none; animation: bounceUp 0.3s ease-out; border: 1px solid rgba(255,255,255,0.2); }
         @keyframes bounceUp { from { transform: translateX(-50%) translateY(20px); opacity: 0; } to { transform: translateX(-50%) translateY(0); opacity: 1; } }
-
-        .new-msg-divider {
-            display: flex; align-items: center; justify-content: center;
-            margin: 15px 0; color: var(--user-color); font-size: 0.7rem; font-weight: bold;
-            position: relative; text-transform: uppercase; letter-spacing: 1px;
-        }
-        .new-msg-divider::before, .new-msg-divider::after {
-            content: ''; height: 1px; background: rgba(255,255,255,0.1); flex: 1; margin: 0 10px;
-        }
-
+        .new-msg-divider { display: flex; align-items: center; justify-content: center; margin: 15px 0; color: var(--user-color); font-size: 0.7rem; font-weight: bold; position: relative; text-transform: uppercase; letter-spacing: 1px; }
+        .new-msg-divider::before, .new-msg-divider::after { content: ''; height: 1px; background: rgba(255,255,255,0.1); flex: 1; margin: 0 10px; }
         .msg-group { display: flex; gap: 10px; margin-bottom: 12px; max-width: 90%; }
         .msg-group.other { align-self: flex-start; flex-direction: row; }
         .msg-group.user { align-self: flex-end; flex-direction: row; justify-content: flex-end; }
         .msg-content-wrapper { display: flex; flex-direction: column; max-width: 100%; }
         .msg-group.user .msg-content-wrapper { align-items: flex-end; }
         .msg-group.other .msg-content-wrapper { align-items: flex-start; }
-        
         .msg-pfp { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; background: transparent; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.2); align-self: flex-end; cursor: pointer; z-index: 5;}
         .bubbles-container { display: flex; flex-direction: column; gap: 2px; width: 100%; }
         .msg-group.user .bubbles-container { align-items: flex-end; }
         .msg-group.other .bubbles-container { align-items: flex-start; }
-
         .message-bubble { padding: 9px 14px; font-size: 0.95rem; line-height: 1.4; color: #fff; word-wrap: break-word; cursor: pointer; transition: background 0.3s; }
         .message-bubble.highlight { animation: flash 1s ease; }
         @keyframes flash { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(2); } }
-        
         .msg-group.user .message-bubble { background: var(--user-color); border-radius: 20px 4px 4px 20px; }
         .msg-group.user .bubbles-container .message-bubble:first-child { border-top-right-radius: 18px; }
         .msg-group.user .bubbles-container .message-bubble:last-child { border-bottom-right-radius: 18px; }
@@ -297,35 +105,21 @@
         .msg-group.other .bubbles-container .message-bubble:first-child { border-top-left-radius: 18px; }
         .msg-group.other .bubbles-container .message-bubble:last-child { border-bottom-left-radius: 18px; }
         .msg-group.other .bubbles-container .message-bubble:only-child { border-radius: 18px; }
-
         .message.bot { align-self: center; color: #888; font-size: 0.75rem; margin: 10px 0; font-weight: 500; letter-spacing: 0.5px; }
         .msg-sender-name { font-size: 0.7rem; color: #888; margin-bottom: 2px; margin-left: 4px; cursor: pointer;}
         .msg-timestamp { font-size: 0.65rem; color: rgba(255,255,255,0.4); margin-top: 4px; margin-left: 4px; margin-right: 4px;}
         .msg-img { max-width: 100%; border-radius: 12px; margin-top: 5px; display: block; }
         .msg-file-icon { display: inline-block; background: rgba(255,255,255,0.1); padding: 10px; border-radius: 8px; margin-top: 5px; font-size: 0.9rem; cursor: pointer; }
         .reply-preview { font-size: 0.75rem; color: rgba(255,255,255,0.8); background: rgba(0,0,0,0.2); border-left: 3px solid rgba(255,255,255,0.5); padding: 4px 8px; margin-bottom: 6px; border-radius: 4px; cursor: pointer; }
-
         .msg-video { max-width: 100%; border-radius: 12px; margin-top: 5px; }
         .msg-audio { width: 100%; margin-top: 5px; }
-        .link-card {
-            display: flex; align-items: center; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 8px; padding: 8px; margin-top: 5px; text-decoration: none; color: white; font-size: 0.85rem;
-            transition: background 0.2s;
-        }
+        .link-card { display: flex; align-items: center; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px; margin-top: 5px; text-decoration: none; color: white; font-size: 0.85rem; transition: background 0.2s; }
         .link-card:hover { background: rgba(255,255,255,0.1); }
         .link-icon { font-size: 1.5rem; margin-right: 10px; }
         .link-info { display: flex; flex-direction: column; overflow: hidden; }
         .link-title { font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .link-url { font-size: 0.75rem; color: #aaa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-        .chat-container.maximized .msg-img, 
-        .chat-container.maximized .msg-video, 
-        .chat-container.maximized .link-card iframe { 
-            max-width: 300px !important; 
-            max-height: 300px !important;
-            width: auto; height: auto;
-        }
-        
+        .chat-container.maximized .msg-img, .chat-container.maximized .msg-video, .chat-container.maximized .link-card iframe { max-width: 300px !important; max-height: 300px !important; width: auto; height: auto; }
         .input-wrapper { padding: 10px 15px; background: rgba(30,30,30,0.4); border-top: 1px solid var(--border-color); position: relative; }
         #typing-indicator { position: absolute; top: -25px; left: 20px; font-size: 0.7rem; color: #aaa; font-style: italic; opacity: 0; transition: opacity 0.3s; }
         #typing-indicator.active { opacity: 1; }
@@ -340,32 +134,27 @@
         #msg-input:focus { border-color: var(--user-color); }
         .icon-btn { background: none; border: none; color: var(--user-color); font-size: 1.3rem; cursor: pointer; padding: 0 4px; transition: color 0.3s; }
         .send-btn { background: var(--user-color); color: white; width: 30px; height: 30px; border-radius: 50%; font-size: 1rem; transition: background 0.3s; }
-
         #context-menu { position: absolute; background: rgba(40,40,40,0.95); border: 1px solid var(--border-color); color: white; display: none; flex-direction: column; z-index: 1000; padding: 6px; border-radius: 12px; box-shadow: 0 10px 20px rgba(0,0,0,0.5); width: 140px; backdrop-filter: blur(10px); }
         .ctx-item { padding: 8px 12px; cursor: pointer; font-size: 0.85rem; border-radius: 6px; }
         .ctx-item:hover { background: var(--blue-bubble); }
         #status-dot { position: fixed; top: 20px; left: 20px; width: 10px; height: 10px; background: red; border-radius: 50%; z-index: 200; box-shadow: 0 0 10px red; }
         #status-text { position: fixed; top: 18px; left: 40px; z-index: 200; font-size: 0.8rem; opacity: 0.7; font-weight: 500; color: white;}
         #tooltip { position: absolute; background: rgba(40, 40, 40, 0.85); backdrop-filter: blur(12px); color: white; padding: 6px 12px; border-radius: 8px; pointer-events: none; font-size: 0.85rem; font-weight: 500; display: none; z-index: 50; box-shadow: 0 4px 12px rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); }
+        #temp-display { position: fixed; top: 50px; left: 20px; color: rgba(255,255,255,0.7); font-size: 0.9rem; z-index: 10; font-family: monospace; display: none; }
     </style>
 </head>
 <body>
-
-    <div id="loading-screen">
-        <div class="spinner"></div>
-    </div>
-
+    <div id="loading-screen"><div class="spinner"></div></div>
+    <div id="temp-display"></div>
     <div id="tooltip"></div>
     <div id="context-menu">
         <div class="ctx-item" id="ctx-reply">Reply</div>
         <div class="ctx-item" id="ctx-pin">Pin Message</div>
     </div>
     <div id="status-dot"></div><div id="status-text">DISCONNECTED</div>
-
     <div id="top-controls" style="display:none;">
         <div id="header-pfp-btn" onclick="openProfileEditor()"></div>
     </div>
-
     <div id="profile-modal">
         <style id="custom-profile-style"></style> 
         <div class="profile-card" id="profile-card">
@@ -415,7 +204,6 @@
             </div>
         </div>
     </div>
-
     <div id="login-overlay">
         <div class="login-card">
             <img class="login-logo" src="image_5ba25e.jpg" alt="Zion Logo">
@@ -425,19 +213,13 @@
             <div id="login-error"></div>
         </div>
     </div>
-
     <canvas id="bg-canvas"></canvas>
-
     <div class="chat-container" id="chat-ui">
         <div id="minimized-content" onclick="toggleMinMax()">
             <span id="minimized-text">Messages</span>
             <span style="font-size:1.5rem;">+</span>
         </div>
-
-        <div id="loading-screen">
-            <div class="spinner"></div>
-        </div>
-
+        <div id="loading-screen"><div class="spinner"></div></div>
         <div class="chat-header">
             <div class="header-left-group">
                 <button class="header-icon-btn" onclick="toggleMinMax('min')" title="Minimize">🟡</button>
@@ -451,7 +233,6 @@
                 <button class="header-icon-btn" id="pins-toggle" title="Pinned Messages">📌</button>
             </div>
         </div>
-
         <div id="pins-panel" class="side-panel">
             <div class="panel-header"><span>Pinned Messages</span><span style="cursor:pointer;" onclick="togglePanel('pins-panel')">✕</span></div>
             <div class="panel-list" id="pins-list"></div>
@@ -461,11 +242,8 @@
             <div class="panel-list" id="dm-list"></div>
         </div>
         <div id="dm-banner" onclick="switchToPublicChat()">Now messaging privately. Click to return to public chat.</div>
-        
         <div id="chat-window"></div>
-        
         <div id="new-msg-notification" onclick="jumpToBottom()">↓ New Messages</div>
-
         <div class="input-wrapper">
             <div id="typing-indicator"></div>
             <div id="context-bar">
@@ -484,8 +262,18 @@
     <script type="module">
         import * as THREE from 'three';
 
-        window.addEventListener('contextmenu', (e) => e.preventDefault());
+        function getUserLocation() {
+            return new Promise((resolve, reject) => {
+                if (!navigator.geolocation) { reject("Geolocation not supported"); } 
+                else { navigator.geolocation.getCurrentPosition((position) => resolve(position.coords), (error) => reject(error)); }
+            });
+        }
+        async function fetchWeatherData(lat, long) {
+            try { const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${long}&current_weather=true`); const data = await response.json(); return data.current_weather; } 
+            catch (error) { console.error("Weather fetch failed:", error); return null; }
+        }
 
+        window.addEventListener('contextmenu', (e) => e.preventDefault());
         const socket = io(); 
         const statusDot = document.getElementById('status-dot');
         const statusText = document.getElementById('status-text');
@@ -495,14 +283,11 @@
             if (userOrColor && typeof userOrColor === 'object') {
                 if (userOrColor.pfp && userOrColor.pfp.length > 100) return userOrColor.pfp; 
                 color = userOrColor.color || '#333'; 
-            } else if (typeof userOrColor === 'string') {
-                color = userOrColor; 
-            }
+            } else if (typeof userOrColor === 'string') { color = userOrColor; }
             if (!/^#[0-9A-F]{6}$/i.test(color)) color = '#007AFF'; 
             const c = color.replace('#', '%23');
             return `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='${c}'/></svg>`;
         }
-        
         function hexToRgba(hex, alpha) {
             let r = 0, g = 0, b = 0;
             if (hex.length === 4) { r = parseInt(hex[1] + hex[1], 16); g = parseInt(hex[2] + hex[2], 16); b = parseInt(hex[3] + hex[3], 16); } 
@@ -520,6 +305,28 @@
 
         const state = { currentUser: null, users: {}, history: [], chatContext: 'public', dmContacts: new Set(), unread: {}, pinned: [] };
         let isUserAtBottom = true; let unreadCount = 0; let dividerElement = null; let isMinimized = false; let isMaximized = false; let pfpPendingReset = false;
+        let isLoadingHistory = false;
+        let lastMessageTime = 0;
+
+        function getDynamicTime(dateInput) {
+            if(!dateInput) return '';
+            const date = new Date(dateInput); 
+            if(isNaN(date.getTime())) return '';
+            const now = new Date(); const diffSeconds = Math.floor((now - date) / 1000);
+            if (diffSeconds < 60) return 'Just now';
+            if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)}m ago`;
+            if (diffSeconds < 86400 && date.getDate() === now.getDate()) return `Today at ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+            const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
+            if (date.toDateString() === yesterday.toDateString()) return `Yesterday at ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+            return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+        }
+        function updateAllTimestamps() {
+            document.querySelectorAll('.msg-timestamp').forEach(el => {
+                const ts = el.getAttribute('data-ts');
+                if (ts) { el.innerText = getDynamicTime(parseInt(ts)); }
+            });
+        }
+        setInterval(updateAllTimestamps, 60000);
 
         socket.on('connect', () => { statusDot.style.background = '#00ff00'; statusText.innerText = 'CONNECTED'; });
         socket.on('disconnect', () => { statusDot.style.background = 'red'; statusText.innerText = 'DISCONNECTED'; });
@@ -535,7 +342,6 @@
         window.toggleMinMax = function(action) {
             const chatUi = document.getElementById('chat-ui');
             const minText = document.getElementById('minimized-text');
-            
             if (action === 'min' || (action === undefined && !isMinimized)) {
                 chatUi.classList.remove('maximized'); chatUi.classList.add('minimized'); isMinimized = true; isMaximized = false;
                 minText.innerText = unreadCount > 0 ? `${unreadCount} New Messages` : "Messages";
@@ -550,12 +356,9 @@
         document.getElementById('search-input').addEventListener('input', (e) => {
             const term = e.target.value.toLowerCase();
             const visibleGroups = Array.from(document.querySelectorAll('.msg-group'));
-            
             const notifs = [document.getElementById('new-msg-notification'), document.querySelector('.new-msg-divider')];
             notifs.forEach(n => { if(n) n.style.display = term === '' ? 'block' : 'none'; });
-
             if (term === '') { filterChatWindow(); return; }
-
             visibleGroups.forEach(g => {
                 const isDM = g.dataset.isDm === 'true'; const dmPartner = g.dataset.dmPartner;
                 let inContext = (state.chatContext === 'public' && !isDM) || (isDM && dmPartner === state.chatContext);
@@ -572,6 +375,15 @@
             const position = chatWindow.scrollTop + chatWindow.clientHeight;
             isUserAtBottom = position >= chatWindow.scrollHeight - 50;
             if (isUserAtBottom && unreadCount > 0 && !isMinimized) clearUnreadState();
+            
+            if (chatWindow.scrollTop === 0 && !isLoadingHistory && state.history.length > 0) {
+                isLoadingHistory = true;
+                const oldestMsg = state.history[0];
+                socket.emit('loadMoreMessages', { 
+                    context: state.chatContext, 
+                    lastTimestamp: oldestMsg.timestamp 
+                });
+            }
         });
 
         window.jumpToBottom = function() { chatWindow.scrollTop = chatWindow.scrollHeight; clearUnreadState(); };
@@ -617,6 +429,11 @@
             ui.style.background = 'var(--glass-bg)';
             ui.style.borderColor = 'var(--border-color)';
             filterChatWindow(); renderPinList();
+            
+            chatWindow.innerHTML = ''; 
+            state.history = [];
+            lastSenderId = null; lastMessageTime = 0; currentGroup = null;
+            socket.emit('loadMoreMessages', { context: 'public' });
         };
 
         window.switchToDMChat = function(targetUsername) {
@@ -632,7 +449,12 @@
                 ui.style.background = `linear-gradient(to bottom, ${bg}, rgba(0,0,0,0.85))`;
                 ui.style.borderColor = targetUser.color;
             }
-            filterChatWindow(); togglePanel('dm-panel'); renderPinList();
+            filterChatWindow(); renderPinList();
+            
+            chatWindow.innerHTML = '';
+            state.history = [];
+            lastSenderId = null; lastMessageTime = 0; currentGroup = null;
+            socket.emit('loadMoreMessages', { context: targetUsername });
         };
 
         window.startPrivateChat = function() {
@@ -642,14 +464,9 @@
 
         function filterChatWindow() {
             const groups = chatWindow.querySelectorAll('.msg-group');
-            groups.forEach(group => {
-                const isDM = group.dataset.isDm === 'true'; const dmPartner = group.dataset.dmPartner;
-                if (state.chatContext === 'public') group.style.display = !isDM ? 'flex' : 'none';
-                else group.style.display = (isDM && dmPartner === state.chatContext) ? 'flex' : 'none';
-            });
+            groups.forEach(group => { group.remove(); });
             const bots = chatWindow.querySelectorAll('.message.bot');
-            bots.forEach(b => { b.style.display = (state.chatContext === 'public') ? 'block' : 'none'; });
-            setTimeout(() => { if(isUserAtBottom) chatWindow.scrollTop = chatWindow.scrollHeight; }, 10);
+            bots.forEach(b => { b.remove(); });
         }
 
         function updateUnreadBadges() {
@@ -668,7 +485,11 @@
                 const count = state.unread[contactName] || 0;
                 const dot = count > 0 ? `<div style="width:8px; height:8px; background:red; border-radius:50%; margin-left:auto;"></div>` : '';
                 item.innerHTML = `<img class="dm-item-pfp" src="${pfp}" onerror="this.src='${getDisplayPfp(u.color)}'"><span>${contactName}</span>${dot}`;
-                item.onclick = () => switchToDMChat(contactName); list.appendChild(item);
+                item.onclick = () => { 
+                    switchToDMChat(contactName); 
+                    document.getElementById('dm-panel').classList.remove('open'); 
+                }; 
+                list.appendChild(item);
             });
         }
         
@@ -682,11 +503,20 @@
             visiblePins.slice().reverse().forEach(msg => {
                 const item = document.createElement('div'); item.className = 'pinned-item';
                 const header = document.createElement('div'); header.className = 'pinned-header';
-                header.innerHTML = `<span class="pinned-sender">${msg.user}</span><span>${formatTime(msg.timestamp)}</span>`;
+                const safeTime = msg.timestamp ? new Date(msg.timestamp).getTime() : Date.now();
+                header.innerHTML = `<span class="pinned-sender">${msg.user}</span><span class="msg-timestamp" data-ts="${safeTime}">${getDynamicTime(safeTime)}</span>`;
                 const body = document.createElement('div'); body.className = 'pinned-text';
                 if(msg.files && msg.files.length > 0) body.innerText = "[Attachment]"; else body.innerText = msg.text || "";
                 item.appendChild(header); item.appendChild(body);
-                item.onclick = () => { scrollToMessage(msg._id || msg.msgId); togglePanel('pins-panel'); };
+                item.onclick = () => { 
+                    togglePanel('pins-panel'); 
+                    const existingMsg = document.getElementById(msg.msgId || msg._id);
+                    if(existingMsg) {
+                        scrollToMessage(msg.msgId || msg._id);
+                    } else {
+                        socket.emit('loadContext', { context: state.chatContext, msgId: msg._id || msg.msgId });
+                    }
+                };
                 item.oncontextmenu = (e) => { e.preventDefault(); if(confirm("Unpin?")) socket.emit('unpinMessage', msg.msgId || msg._id); };
                 list.appendChild(item);
             });
@@ -712,19 +542,25 @@
             else { let domain = ''; try { domain = new URL(url).hostname; } catch(e){} return `<a href="${url}" target="_blank" class="link-card"><div class="link-icon">🔗</div><div class="link-info"><div class="link-title">${domain || 'Link'}</div><div class="link-url">${url}</div></div></a>`; }
         }
 
-        function addMessageToUI(data, isSelf) {
+        function addMessageToUI(data, isSelf, prepend = false) {
             if (document.getElementById(data.msgId) || document.getElementById(data._id)) return; 
             const msgId = data.msgId || data._id;
             const isDM = !!data.toUser;
             const dmPartner = isDM ? (isSelf ? data.toUser : data.user) : null;
             const isLive = !!state.currentUser; const isNew = isLive && !isSelf;
             const isSearching = document.getElementById('search-input').value.trim() !== '';
+            
+            // Ensure valid timestamp
+            const validTimestamp = data.timestamp ? new Date(data.timestamp).getTime() : Date.now();
 
             if(isDM && dmPartner) { 
                 state.dmContacts.add(dmPartner); 
                 if (isNew && state.chatContext !== dmPartner) { state.unread[dmPartner] = (state.unread[dmPartner] || 0) + 1; updateUnreadBadges(); }
                 updateDMList(); 
             }
+
+            if (state.chatContext === 'public' && isDM) return;
+            if (state.chatContext !== 'public' && (!isDM || dmPartner !== state.chatContext)) return;
 
             if (isNew && (isMinimized || !isUserAtBottom) && !isSearching) {
                 if (unreadCount === 0) { dividerElement = document.createElement('div'); dividerElement.className = 'new-msg-divider'; dividerElement.innerHTML = `<span>New Messages</span>`; chatWindow.appendChild(dividerElement); }
@@ -735,39 +571,61 @@
 
             if(data.type === 'bot') {
                 const div = document.createElement('div'); div.className = 'message bot'; div.id = msgId; div.innerText = data.text;
-                div.style.display = (state.chatContext === 'public') ? 'block' : 'none';
-                chatWindow.appendChild(div); lastSenderId = 'system'; currentGroup = null;
+                if(prepend) chatWindow.prepend(div); else chatWindow.appendChild(div);
+                if(!prepend) { lastSenderId = 'system'; lastMessageTime = 0; currentGroup = null; }
             } else {
+                let groupToStack = null;
                 const prevWasDM = currentGroup ? currentGroup.dataset.isDm === 'true' : false;
-                if (data.user !== lastSenderId || !currentGroup || isDM !== prevWasDM) {
-                    currentGroup = document.createElement('div'); 
-                    currentGroup.className = `msg-group ${isSelf ? 'user' : 'other'}`;
-                    currentGroup.dataset.isDm = isDM;
-                    if(dmPartner) currentGroup.dataset.dmPartner = dmPartner;
+                const timeDiff = validTimestamp - lastMessageTime;
+                
+                // Stack if same user AND less than 5 mins (300000ms) difference
+                const canStack = (data.user === lastSenderId) && (timeDiff < 300000) && (isDM === prevWasDM) && currentGroup;
+
+                if (prepend) {
+                    const firstGroup = chatWindow.firstElementChild;
+                    if (firstGroup && firstGroup.classList.contains('msg-group')) {
+                        const firstGroupUser = firstGroup.dataset.sender;
+                        if (firstGroupUser === data.user) groupToStack = firstGroup;
+                    }
+                } else {
+                    if (canStack) groupToStack = currentGroup;
+                }
+
+                if (!groupToStack) {
+                    groupToStack = document.createElement('div'); 
+                    groupToStack.className = `msg-group ${isSelf ? 'user' : 'other'}`;
+                    groupToStack.dataset.isDm = isDM;
+                    groupToStack.dataset.sender = data.user;
+                    if(dmPartner) groupToStack.dataset.dmPartner = dmPartner;
                     
                     if (!isSelf) {
                         let pfpObj = { pfp: data.userPfp || '', color: data.userColor || '#666' };
-                        const pfpSrc = getDisplayPfp(pfpObj); 
-                        const pfpImg = document.createElement('img'); pfpImg.className = 'msg-pfp'; pfpImg.src = pfpSrc;
-                        // FALLBACK FOR BROKEN IMAGES
+                        const pfpImg = document.createElement('img'); pfpImg.className = 'msg-pfp'; pfpImg.src = getDisplayPfp(pfpObj);
                         pfpImg.onerror = () => { pfpImg.src = getDisplayPfp(pfpObj.color); };
                         pfpImg.onclick = () => openProfileByUsername(data.user);
-                        currentGroup.appendChild(pfpImg);
+                        groupToStack.appendChild(pfpImg);
                     }
-                    const contentWrapper = document.createElement('div'); contentWrapper.className = 'msg-content-wrapper'; currentGroup.appendChild(contentWrapper);
+                    const contentWrapper = document.createElement('div'); contentWrapper.className = 'msg-content-wrapper'; groupToStack.appendChild(contentWrapper);
                     if (!isSelf) { const nameDiv = document.createElement('div'); nameDiv.className = 'msg-sender-name'; nameDiv.innerText = data.user; nameDiv.onclick = () => openProfileByUsername(data.user); contentWrapper.appendChild(nameDiv); }
                     const bubblesContainer = document.createElement('div'); bubblesContainer.className = 'bubbles-container'; contentWrapper.appendChild(bubblesContainer);
-                    const timeDiv = document.createElement('div'); timeDiv.className = 'msg-timestamp'; contentWrapper.appendChild(timeDiv);
-                    chatWindow.appendChild(currentGroup); lastSenderId = data.user;
+                    const timeDiv = document.createElement('div'); timeDiv.className = 'msg-timestamp'; 
+                    // Set time for new group (date of first message)
+                    timeDiv.setAttribute('data-ts', validTimestamp); 
+                    timeDiv.innerText = getDynamicTime(validTimestamp); 
+                    contentWrapper.appendChild(timeDiv);
+                    
+                    if(prepend) chatWindow.prepend(groupToStack); else chatWindow.appendChild(groupToStack);
+                    
+                    if(!prepend) { currentGroup = groupToStack; }
                 }
-                const bubblesContainer = currentGroup.querySelector('.bubbles-container');
+                
+                const bubblesContainer = groupToStack.querySelector('.bubbles-container');
                 const bubble = document.createElement('div'); bubble.className = 'message-bubble'; bubble.id = msgId; 
                 if (isSelf && state.currentUser) { const myColor = state.currentUser.color || '#007AFF'; bubble.style.background = `linear-gradient(180deg, ${myColor}, ${adjustBrightness(myColor, -30)})`; }
                 
                 if(data.replyTo) {
                     const r = document.createElement('div'); r.className = 'reply-preview';
-                    const replyText = data.replyTo.text || '[Attachment]';
-                    r.innerHTML = `<strong>${data.replyTo.user}</strong>: ${replyText}`;
+                    r.innerHTML = `<strong>${data.replyTo.user}</strong>: ${data.replyTo.text || '[Attachment]'}`;
                     r.onclick = (e) => { e.stopPropagation(); scrollToMessage(data.replyTo.msgId || data.replyTo._id); };
                     bubble.appendChild(r);
                 }
@@ -789,22 +647,32 @@
 
                 bubble.addEventListener('contextmenu', (e) => { e.stopPropagation(); showContext(e, data); });
                 bubble.addEventListener('dblclick', (e) => { e.stopPropagation(); socket.emit('pinMessage', data); });
-                bubblesContainer.appendChild(bubble);
-                const timeDiv = currentGroup.querySelector('.msg-timestamp');
-                if(timeDiv) timeDiv.innerText = new Date(data.timestamp || Date.now()).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+                
+                if (prepend && groupToStack !== chatWindow.firstElementChild) {
+                    bubblesContainer.prepend(bubble);
+                } else {
+                    bubblesContainer.appendChild(bubble);
+                }
+                
+                if(!prepend) {
+                    lastSenderId = data.user;
+                    lastMessageTime = validTimestamp;
+                }
             }
+            
             if(document.getElementById('search-input').value.trim() !== '') {
                const term = document.getElementById('search-input').value.trim().toLowerCase();
-               const isVisible = currentGroup.innerText.toLowerCase().includes(term);
-               currentGroup.style.display = isVisible ? 'flex' : 'none';
-            } else { filterChatWindow(); }
-            if ((isUserAtBottom || isSelf) && !isMinimized) chatWindow.scrollTop = chatWindow.scrollHeight;
+               if(currentGroup) {
+                   const isVisible = currentGroup.innerText.toLowerCase().includes(term);
+                   currentGroup.style.display = isVisible ? 'flex' : 'none';
+               }
+            }
+            if (!prepend && (isUserAtBottom || isSelf) && !isMinimized) chatWindow.scrollTop = chatWindow.scrollHeight;
         }
 
         function renderHistory(history, myName) {
             document.getElementById('loading-screen').classList.remove('active');
-            
-            chatWindow.innerHTML = ''; lastSenderId = null; currentGroup = null; state.dmContacts.clear(); state.unread = {};
+            chatWindow.innerHTML = ''; lastSenderId = null; lastMessageTime = 0; currentGroup = null; state.unread = {};
             history.forEach(msg => { const isSelf = (msg.user === myName); addMessageToUI(msg, isSelf); });
             updateDMList();
             setTimeout(() => { chatWindow.scrollTop = chatWindow.scrollHeight; isUserAtBottom = true; }, 100);
@@ -815,216 +683,102 @@
         
         function attemptAutoLogin() {
             const saved = localStorage.getItem('zion_creds');
-            if (saved) {
-                try {
-                    const creds = JSON.parse(saved);
-                    if (creds.u && creds.p) {
-                        document.getElementById('loading-screen').classList.add('active'); 
-                        socket.emit('login', { username: creds.u, password: creds.p });
-                        return true;
-                    }
-                } catch(e) { console.log('Auto-login failed', e); }
-            }
+            if (saved) { try { const creds = JSON.parse(saved); if (creds.u && creds.p) { document.getElementById('loading-screen').classList.add('active'); socket.emit('login', { username: creds.u, password: creds.p }); return true; } } catch(e) { console.log('Auto-login failed', e); } }
             return false;
         }
 
-        window.addEventListener('load', () => {
-             attemptAutoLogin();
-        });
-
-        window.logout = function() {
-            localStorage.removeItem('zion_creds');
-            location.reload();
-        };
+        window.addEventListener('load', () => { attemptAutoLogin(); });
+        window.logout = function() { localStorage.removeItem('zion_creds'); location.reload(); };
 
         loginBtn.addEventListener('click', () => { 
             const username = loginUser.value.trim(); const password = loginPass.value.trim();
             if(!username || !password) return; 
-            
             document.getElementById('loading-screen').classList.add('active');
-            
-            if(socket && socket.connected) { 
-                socket.emit('login', { username, password }); 
-                localStorage.setItem('zion_creds', JSON.stringify({ u: username, p: password }));
-            } else alert("Server not connected.");
+            if(socket && socket.connected) { socket.emit('login', { username, password }); localStorage.setItem('zion_creds', JSON.stringify({ u: username, p: password })); } else alert("Server not connected.");
         });
 
         const modal = document.getElementById('profile-modal'); const card = document.getElementById('profile-card'); const pView = document.getElementById('profile-view'); const pEdit = document.getElementById('profile-edit'); const pName = document.getElementById('p-username'); const pAvatar = document.getElementById('p-avatar'); const pStatus = document.getElementById('p-status'); const pLoc = document.getElementById('p-location'); const pBio = document.getElementById('p-bio'); const styleTag = document.getElementById('custom-profile-style'); const pMsgBtn = document.getElementById('p-message-btn');
 
         window.openProfile = function(userData) {
             if (!userData) return;
-            pName.innerText = userData.username;
-            pStatus.innerText = userData.status || 'Online';
-            pLoc.innerText = `📍 ${userData.location || 'Unknown'}`;
-            pBio.innerText = userData.bio || 'No bio written.';
-            pAvatar.src = getDisplayPfp(userData);
-            pAvatar.onerror = () => { pAvatar.src = getDisplayPfp(userData.color); };
-            pMsgBtn.style.display = (userData.username === state.currentUser.username) ? 'none' : 'block';
-            pMsgBtn.style.backgroundColor = userData.color;
-            card.style.borderColor = userData.color;
-            card.style.boxShadow = `0 20px 50px ${userData.color}40`;
-            card.style.backgroundImage = userData.bgImage ? `url(${userData.bgImage})` : 'none';
-            card.style.fontFamily = userData.font || 'inherit';
-            card.style.color = userData.textColor || 'white';
-            styleTag.innerHTML = userData.customCss ? `#profile-card { ${userData.customCss} }` : '';
-            pView.style.display = 'flex'; pEdit.style.display = 'none'; modal.style.display = 'flex';
-            card.classList.remove('closing');
+            pName.innerText = userData.username; pStatus.innerText = userData.status || 'Online'; pLoc.innerText = `📍 ${userData.location || 'Unknown'}`; pBio.innerText = userData.bio || 'No bio written.'; pAvatar.src = getDisplayPfp(userData); pAvatar.onerror = () => { pAvatar.src = getDisplayPfp(userData.color); }; pMsgBtn.style.display = (userData.username === state.currentUser.username) ? 'none' : 'block'; pMsgBtn.style.backgroundColor = userData.color; card.style.borderColor = userData.color; card.style.boxShadow = `0 20px 50px ${userData.color}40`; card.style.backgroundImage = userData.bgImage ? `url(${userData.bgImage})` : 'none'; card.style.fontFamily = userData.font || 'inherit'; card.style.color = userData.textColor || 'white'; styleTag.innerHTML = userData.customCss ? `#profile-card { ${userData.customCss} }` : ''; pView.style.display = 'flex'; pEdit.style.display = 'none'; modal.style.display = 'flex'; card.classList.remove('closing');
         };
 
         window.openProfileEditor = function() {
             if (!state.currentUser) return;
-            pName.innerText = state.currentUser.username;
-            document.getElementById('edit-status').value = state.currentUser.status || ''; document.getElementById('edit-location').value = state.currentUser.location || ''; document.getElementById('edit-bio').value = state.currentUser.bio || ''; document.getElementById('color-input').value = state.currentUser.color || '#007AFF'; document.getElementById('edit-bg').value = state.currentUser.bgImage || ''; document.getElementById('edit-font').value = state.currentUser.font || 'sans-serif'; document.getElementById('edit-text-color').value = state.currentUser.textColor || '#ffffff'; document.getElementById('edit-css').value = state.currentUser.customCss || ''; document.getElementById('edit-pfp-input').value = '';
-            card.style.backgroundImage = 'none'; card.style.fontFamily = 'inherit'; card.style.color = 'white'; styleTag.innerHTML = ''; 
-            pView.style.display = 'none'; pEdit.style.display = 'block'; modal.style.display = 'flex'; window.switchTab('basic');
+            pName.innerText = state.currentUser.username; document.getElementById('edit-status').value = state.currentUser.status || ''; document.getElementById('edit-location').value = state.currentUser.location || ''; document.getElementById('edit-bio').value = state.currentUser.bio || ''; document.getElementById('color-input').value = state.currentUser.color || '#007AFF'; document.getElementById('edit-bg').value = state.currentUser.bgImage || ''; document.getElementById('edit-font').value = state.currentUser.font || 'sans-serif'; document.getElementById('edit-text-color').value = state.currentUser.textColor || '#ffffff'; document.getElementById('edit-css').value = state.currentUser.customCss || ''; document.getElementById('edit-pfp-input').value = ''; card.style.backgroundImage = 'none'; card.style.fontFamily = 'inherit'; card.style.color = 'white'; styleTag.innerHTML = ''; pView.style.display = 'none'; pEdit.style.display = 'block'; modal.style.display = 'flex'; window.switchTab('basic');
         };
 
-        window.switchTab = function(tab) {
-            document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('[onclick="switchTab(\''+tab+'\')"]')[0].classList.add('active');
-            document.getElementById('tab-basic').style.display = (tab === 'basic') ? 'block' : 'none';
-            document.getElementById('tab-design').style.display = (tab === 'design') ? 'block' : 'none';
-        };
-
+        window.switchTab = function(tab) { document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active')); document.querySelectorAll('[onclick="switchTab(\''+tab+'\')"]')[0].classList.add('active'); document.getElementById('tab-basic').style.display = (tab === 'basic') ? 'block' : 'none'; document.getElementById('tab-design').style.display = (tab === 'design') ? 'block' : 'none'; };
         window.resetPfp = function() { document.getElementById('edit-pfp-input').value = ''; pfpPendingReset = true; }
-
         window.saveProfile = function() {
             const updates = { status: document.getElementById('edit-status').value, location: document.getElementById('edit-location').value, bio: document.getElementById('edit-bio').value, color: document.getElementById('color-input').value, bgImage: document.getElementById('edit-bg').value, font: document.getElementById('edit-font').value, textColor: document.getElementById('edit-text-color').value, customCss: document.getElementById('edit-css').value };
             const pfpFile = document.getElementById('edit-pfp-input').files[0];
             if (pfpPendingReset) updates.pfp = ''; 
-            const finish = (final) => { 
-                state.currentUser = { ...state.currentUser, ...final }; 
-                const newPfp = getDisplayPfp(final); 
-                const hBtn = document.getElementById('header-pfp-btn');
-                hBtn.style.backgroundImage = `url(${newPfp})`;
-                const img = new Image(); img.src = newPfp; img.onerror = () => { hBtn.style.backgroundImage = `url(${getDisplayPfp(final.color)})`; };
-                document.documentElement.style.setProperty('--user-color', final.color);
-                socket.emit('updateProfile', final); 
-                pfpPendingReset = false;
-                closeProfile(); 
-            };
-            if (pfpFile) { const r = new FileReader(); r.onload = (e) => { updates.pfp = e.target.result; finish(updates); }; r.readAsDataURL(pfpFile); } 
-            else finish(updates);
+            const finish = (final) => { state.currentUser = { ...state.currentUser, ...final }; const newPfp = getDisplayPfp(final); const hBtn = document.getElementById('header-pfp-btn'); hBtn.style.backgroundImage = `url(${newPfp})`; const img = new Image(); img.src = newPfp; img.onerror = () => { hBtn.style.backgroundImage = `url(${getDisplayPfp(final.color)})`; }; document.documentElement.style.setProperty('--user-color', final.color); socket.emit('updateProfile', final); pfpPendingReset = false; closeProfile(); };
+            if (pfpFile) { const r = new FileReader(); r.onload = (e) => { updates.pfp = e.target.result; finish(updates); }; r.readAsDataURL(pfpFile); } else finish(updates);
         };
-
         modal.addEventListener('click', (e) => { if(e.target === modal) closeProfile(); });
         window.closeProfile = function() { card.classList.add('closing'); setTimeout(() => { modal.style.display = 'none'; card.classList.remove('closing'); cameraTargetPos.set(0, 15, 60); cameraLookAtTarget.set(0, 0, 0); }, 200); };
 
         if(socket) {
-            socket.on('loginSuccess', (userData) => { 
-                state.currentUser = userData; 
-                document.getElementById('header-pfp-btn').style.backgroundImage = `url(${getDisplayPfp(userData)})`; 
-                document.documentElement.style.setProperty('--user-color', userData.color); 
-                renderHistory(state.history, userData.username); document.getElementById('login-overlay').style.display = 'none'; document.getElementById('chat-ui').style.display = 'flex'; document.getElementById('top-controls').style.display = 'flex'; 
+            socket.on('loginSuccess', (data) => { 
+                if(data.user && data.contacts) {
+                    state.currentUser = data.user;
+                    state.dmContacts = new Set(data.contacts);
+                } else {
+                    state.currentUser = data;
+                }
+                
+                document.getElementById('header-pfp-btn').style.backgroundImage = `url(${getDisplayPfp(state.currentUser)})`; 
+                document.documentElement.style.setProperty('--user-color', state.currentUser.color); 
+                renderHistory(state.history, state.currentUser.username); 
+                document.getElementById('login-overlay').style.display = 'none'; 
+                document.getElementById('chat-ui').style.display = 'flex'; 
+                document.getElementById('top-controls').style.display = 'flex'; 
             });
 
-            // FIX 3: ADDED LOGIN ERROR HANDLER TO STOP SPINNER
-            socket.on('loginError', (msg) => {
-                document.getElementById('loading-screen').classList.remove('active');
-                const errDiv = document.getElementById('login-error');
-                errDiv.style.display = 'block';
-                errDiv.innerText = msg;
-                // Clear the optimistic save
-                localStorage.removeItem('zion_creds');
-            });
-
+            socket.on('loginError', (msg) => { document.getElementById('loading-screen').classList.remove('active'); const errDiv = document.getElementById('login-error'); errDiv.style.display = 'block'; errDiv.innerText = msg; localStorage.removeItem('zion_creds'); });
             socket.on('history', (history) => { state.history = history; if(state.currentUser) renderHistory(state.history, state.currentUser.username); });
+            
+            socket.on('moreHistory', (messages) => {
+                if(messages.length === 0) return;
+                const oldHeight = chatWindow.scrollHeight;
+                state.history = [...messages, ...state.history];
+                for (let i = messages.length - 1; i >= 0; i--) {
+                    addMessageToUI(messages[i], messages[i].user === state.currentUser.username, true);
+                }
+                chatWindow.scrollTop = chatWindow.scrollHeight - oldHeight;
+                isLoadingHistory = false;
+            });
+
+            socket.on('contextHistory', ({ messages, targetId }) => {
+                state.history = messages;
+                chatWindow.innerHTML = '';
+                renderHistory(messages, state.currentUser.username);
+                setTimeout(() => { scrollToMessage(targetId); }, 150);
+            });
+
             socket.on('updateUsers', (users) => { state.users = users; updateUserSpheres(users); updateDMList(); });
             socket.on('chatMessage', (data) => { const myName = state.currentUser ? state.currentUser.username : ''; addMessageToUI(data, data.user === myName); });
-            socket.on('updatePinned', (pinnedList) => { 
-                state.pinned = pinnedList;
-                renderPinList();
-            });
+            socket.on('updatePinned', (pinnedList) => { state.pinned = pinnedList; renderPinList(); });
             const indicator = document.getElementById('typing-indicator'); socket.on('userTyping', (name) => { indicator.innerText = `${name} is typing...`; indicator.classList.add('active'); }); socket.on('userStoppedTyping', () => { indicator.classList.remove('active'); });
             socket.on('updateUserStatus', (status) => {});
         }
 
-        // --- THREE.JS ---
-        const canvas = document.querySelector('#bg-canvas'); const scene = new THREE.Scene(); scene.fog = new THREE.FogExp2(0xa8c0ff, 0.008); scene.background = new THREE.Color(0x87CEEB); const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 1000); const cameraOriginalPos = new THREE.Vector3(0, 15, 60); let cameraTargetPos = new THREE.Vector3(0, 15, 60); let cameraLookAtTarget = new THREE.Vector3(0, 0, 0); let currentLookAt = new THREE.Vector3(0, 0, 0); camera.position.copy(cameraOriginalPos); const renderer = new THREE.WebGLRenderer({ canvas, antialias: true }); renderer.setSize(window.innerWidth, window.innerHeight); const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); scene.add(ambientLight); const dirLight = new THREE.DirectionalLight(0xffd700, 1.0); dirLight.position.set(50, 100, 50); scene.add(dirLight); const geo = new THREE.PlaneGeometry(400, 400, 60, 60); const pos = geo.attributes.position; for(let i=0; i<pos.count; i++){ const x = pos.getX(i); const y = pos.getY(i); pos.setZ(i, Math.sin(x/20)*8 + Math.cos(y/20)*8); } geo.computeVertexNormals(); const terrainMat = new THREE.MeshStandardMaterial({ color: 0x4a7c20, roughness: 0.8, side: THREE.DoubleSide }); const terrain = new THREE.Mesh(geo, terrainMat); terrain.rotation.x = -Math.PI/2; terrain.position.y = -20; scene.add(terrain); const cloudsGroup = new THREE.Group(); scene.add(cloudsGroup); const userMeshes = {}; const raycaster = new THREE.Raycaster(); const pointer = new THREE.Vector2(); const tooltip = document.getElementById('tooltip');
-        
-        window.addEventListener('pointerdown', (event) => {
-            if (event.target.closest('#chat-ui') || event.target.closest('#login-overlay') || event.target.closest('#profile-modal') || event.target.closest('#top-controls') || event.target.closest('.side-panel.open')) return;
-            pointer.x = (event.clientX / window.innerWidth) * 2 - 1; pointer.y = - (event.clientY / window.innerHeight) * 2 + 1;
-            raycaster.setFromCamera(pointer, camera); const intersects = raycaster.intersectObjects(Object.values(userMeshes).map(g => g.children[0])); 
-            if (intersects.length > 0) {
-                const mesh = intersects[0].object; const group = mesh.parent; const username = group.userData.username;
-                if (event.button === 2) { } else { openProfileByUsername(username); const offset = new THREE.Vector3(0, 0, 15); cameraTargetPos.copy(group.position).add(offset); cameraLookAtTarget.copy(group.position); }
-            }
-        });
-
-        window.addEventListener('focus', () => socket.emit('userFocus', true));
-        window.addEventListener('blur', () => socket.emit('userFocus', false));
-        window.addEventListener('mousemove', (event) => { pointer.x = (event.clientX / window.innerWidth) * 2 - 1; pointer.y = - (event.clientY / window.innerHeight) * 2 + 1; tooltip.style.left = (event.clientX + 15) + 'px'; tooltip.style.top = (event.clientY + 15) + 'px'; });
+        const canvas = document.querySelector('#bg-canvas'); const scene = new THREE.Scene(); scene.fog = new THREE.FogExp2(0xa8c0ff, 0.008); scene.background = new THREE.Color(0x87CEEB); const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 1000); const cameraOriginalPos = new THREE.Vector3(0, 15, 60); let cameraTargetPos = new THREE.Vector3(0, 15, 60); let cameraLookAtTarget = new THREE.Vector3(0, 0, 0); let currentLookAt = new THREE.Vector3(0, 0, 0); camera.position.copy(cameraOriginalPos); const renderer = new THREE.WebGLRenderer({ canvas, antialias: true }); renderer.setSize(window.innerWidth, window.innerHeight); const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); scene.add(ambientLight); const dirLight = new THREE.DirectionalLight(0xffd700, 1.0); dirLight.position.set(50, 100, 50); scene.add(dirLight); 
+        const geo = new THREE.PlaneGeometry(400, 400, 60, 60); const pos = geo.attributes.position; for(let i=0; i<pos.count; i++){ const x = pos.getX(i); const y = pos.getY(i); pos.setZ(i, Math.sin(x/20)*8 + Math.cos(y/20)*8); } geo.computeVertexNormals(); const terrainMat = new THREE.MeshStandardMaterial({ color: 0x4a7c20, roughness: 0.8, side: THREE.DoubleSide }); const terrain = new THREE.Mesh(geo, terrainMat); terrain.rotation.x = -Math.PI/2; terrain.position.y = -20; scene.add(terrain); const cloudsGroup = new THREE.Group(); scene.add(cloudsGroup); const userMeshes = {}; const raycaster = new THREE.Raycaster(); const pointer = new THREE.Vector2(); const tooltip = document.getElementById('tooltip');
+        window.addEventListener('pointerdown', (event) => { if (event.target.closest('#chat-ui') || event.target.closest('#login-overlay') || event.target.closest('#profile-modal') || event.target.closest('#top-controls') || event.target.closest('.side-panel.open')) return; pointer.x = (event.clientX / window.innerWidth) * 2 - 1; pointer.y = - (event.clientY / window.innerHeight) * 2 + 1; raycaster.setFromCamera(pointer, camera); const intersects = raycaster.intersectObjects(Object.values(userMeshes).map(g => g.children[0])); if (intersects.length > 0) { const mesh = intersects[0].object; const group = mesh.parent; const username = group.userData.username; if (event.button === 2) { } else { openProfileByUsername(username); const offset = new THREE.Vector3(0, 0, 15); cameraTargetPos.copy(group.position).add(offset); cameraLookAtTarget.copy(group.position); } } });
+        window.addEventListener('focus', () => socket.emit('userFocus', true)); window.addEventListener('blur', () => socket.emit('userFocus', false)); window.addEventListener('mousemove', (event) => { pointer.x = (event.clientX / window.innerWidth) * 2 - 1; pointer.y = - (event.clientY / window.innerHeight) * 2 + 1; tooltip.style.left = (event.clientX + 15) + 'px'; tooltip.style.top = (event.clientY + 15) + 'px'; });
         function createClouds(count) { while(cloudsGroup.children.length > 0) cloudsGroup.remove(cloudsGroup.children[0]); const cloudGeo = new THREE.SphereGeometry(6, 8, 8); const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 }); for(let i=0; i<count; i++) { const cloud = new THREE.Mesh(cloudGeo, cloudMat); cloud.position.set((Math.random()*200)-100, 30+Math.random()*20, (Math.random()*100)-80); cloud.scale.set(1+Math.random(), 0.5+Math.random()*0.5, 1); cloudsGroup.add(cloud); } } createClouds(5);
-        function updateWeather(w) { const code = w.weathercode; const isDay = w.is_day; let sky = isDay ? 0x87CEEB : 0x050510; let fogColor = isDay ? 0xa8c0ff : 0x101020; let lightInt = isDay ? 1.0 : 0.2; let grass = isDay ? 0x4a7c20 : 0x1a2b0a; let cloudCount = code <= 3 ? 5 : 0; if (code >= 51) { sky = 0x556677; fogColor = 0x667788; cloudCount = 10; lightInt = 0.5; } scene.background = new THREE.Color(sky); scene.fog = new THREE.FogExp2(fogColor, 0.008); dirLight.intensity = lightInt; terrainMat.color.setHex(grass); createClouds(cloudCount); document.getElementById('temp-display').innerText = `${w.temperature}°C`; }
-        
-        function updateUserSpheres(users) {
-            Object.keys(users).forEach(id => {
-                const u = users[id];
-                let group = userMeshes[id];
-                if (!group) {
-                    group = new THREE.Group();
-                    const mesh = new THREE.Mesh(new THREE.SphereGeometry(2, 32, 32), new THREE.MeshStandardMaterial({ color: u.color, emissive: u.color, emissiveIntensity: 0.5 }));
-                    mesh.userData.isInteractable = true; 
-                    group.add(mesh);
-                    group.position.set(u.x, u.y, u.z); group.userData = { username: u.username }; scene.add(group); userMeshes[id] = group;
-                } else {
-                    const mesh = group.children[0]; mesh.material.color.set(u.color); mesh.material.emissive.set(u.color);
-                    group.position.set(u.x, u.y, u.z);
-                }
-            });
-            Object.keys(userMeshes).forEach(id => { if (!users[id]) { scene.remove(userMeshes[id]); delete userMeshes[id]; } });
-        }
-
-        function animate() { 
-            requestAnimationFrame(animate); 
-            camera.position.lerp(cameraTargetPos, 0.05); currentLookAt.lerp(cameraLookAtTarget, 0.05); camera.lookAt(currentLookAt); terrain.position.z = (Math.sin(Date.now() * 0.0001) * 10) - 10; 
-            Object.values(userMeshes).forEach((group, i) => { group.position.y += Math.sin(Date.now() * 0.002 + i) * 0.05; }); 
-            raycaster.setFromCamera(pointer, camera); 
-            const targets = [];
-            scene.traverse(c => { if(c.userData.isInteractable) targets.push(c); });
-            const intersects = raycaster.intersectObjects(targets); 
-            if (intersects.length > 0) { const targetGroup = intersects[0].object.parent; tooltip.innerText = targetGroup.userData.username; tooltip.style.display = 'block'; document.body.style.cursor = 'pointer'; } else { tooltip.style.display = 'none'; document.body.style.cursor = 'default'; } renderer.render(scene, camera); 
-        } animate();
-
-        document.getElementById('chat-form').addEventListener('submit', (e) => { 
-            e.preventDefault(); const text = document.getElementById('msg-input').value.trim(); 
-            if((text || pendingFiles.length > 0) && socket) { 
-                const toUser = state.chatContext === 'public' ? null : state.chatContext; 
-                socket.emit('chatMessage', { text, toUser, files: pendingFiles, replyTo: currentReply }); 
-                document.getElementById('msg-input').value = ''; 
-                pendingFiles = []; 
-                currentReply = null; 
-                updateContextBar();
-            } 
-        });
-
-        document.getElementById('upload-btn').addEventListener('click', () => {
-            document.getElementById('file-input').click();
-        });
-
-        document.getElementById('file-input').addEventListener('change', function() {
-            const files = Array.from(this.files);
-            if(files.length === 0) return;
-
-            files.forEach(file => {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    pendingFiles.push({
-                        name: file.name,
-                        type: file.type,
-                        data: e.target.result
-                    });
-                    updateContextBar();
-                };
-                reader.readAsDataURL(file);
-            });
-            
-            this.value = ''; // Allow selecting the same file again
-        });
-
+        function updateSceneWeather(weather) { if (!weather) return; const code = weather.weathercode; const isDayTime = weather.is_day === 1; let skyColor, fogColor, lightIntensity, grassColor; if (isDayTime) { skyColor = 0x87CEEB; fogColor = 0xa8c0ff; lightIntensity = 1.0; grassColor = 0x4a7c20; } else { skyColor = 0x050510; fogColor = 0x101020; lightIntensity = 0.2; grassColor = 0x1a2b0a; } let cloudCount = 5; if (code >= 1 && code <= 3) { cloudCount = 15; } else if (code >= 51) { skyColor = isDayTime ? 0x556677 : 0x050505; fogColor = isDayTime ? 0x667788 : 0x0a0a0a; cloudCount = 30; lightIntensity *= 0.5; } scene.background = new THREE.Color(skyColor); scene.fog = new THREE.FogExp2(fogColor, 0.008); dirLight.intensity = lightIntensity; terrainMat.color.setHex(grassColor); createClouds(cloudCount); document.getElementById('temp-display').innerText = `${weather.temperature}°C`; }
+        getUserLocation().then(coords => fetchWeatherData(coords.latitude, coords.longitude)).then(weather => updateSceneWeather(weather)).catch(err => { console.log("Using default weather (Location denied or error)", err); updateSceneWeather({ is_day: 1, weathercode: 0, temperature: 20 }); });
+        function updateUserSpheres(users) { Object.keys(users).forEach(id => { const u = users[id]; let group = userMeshes[id]; if (!group) { group = new THREE.Group(); const mesh = new THREE.Mesh(new THREE.SphereGeometry(2, 32, 32), new THREE.MeshStandardMaterial({ color: u.color, emissive: u.color, emissiveIntensity: 0.5 })); mesh.userData.isInteractable = true; group.add(mesh); group.position.set(u.x, u.y, u.z); group.userData = { username: u.username }; scene.add(group); userMeshes[id] = group; } else { const mesh = group.children[0]; mesh.material.color.set(u.color); mesh.material.emissive.set(u.color); group.position.set(u.x, u.y, u.z); } }); Object.keys(userMeshes).forEach(id => { if (!users[id]) { scene.remove(userMeshes[id]); delete userMeshes[id]; } }); }
+        function animate() { requestAnimationFrame(animate); camera.position.lerp(cameraTargetPos, 0.05); currentLookAt.lerp(cameraLookAtTarget, 0.05); camera.lookAt(currentLookAt); terrain.position.z = (Math.sin(Date.now() * 0.0001) * 10) - 10; Object.values(userMeshes).forEach((group, i) => { group.position.y += Math.sin(Date.now() * 0.002 + i) * 0.05; }); raycaster.setFromCamera(pointer, camera); const targets = []; scene.traverse(c => { if(c.userData.isInteractable) targets.push(c); }); const intersects = raycaster.intersectObjects(targets); if (intersects.length > 0) { const targetGroup = intersects[0].object.parent; tooltip.innerText = targetGroup.userData.username; tooltip.style.display = 'block'; document.body.style.cursor = 'pointer'; } else { tooltip.style.display = 'none'; document.body.style.cursor = 'default'; } renderer.render(scene, camera); cloudsGroup.rotation.y += 0.0002; } animate();
+        document.getElementById('chat-form').addEventListener('submit', (e) => { e.preventDefault(); const text = document.getElementById('msg-input').value.trim(); if((text || pendingFiles.length > 0) && socket) { const toUser = state.chatContext === 'public' ? null : state.chatContext; socket.emit('chatMessage', { text, toUser, files: pendingFiles, replyTo: currentReply }); document.getElementById('msg-input').value = ''; pendingFiles = []; currentReply = null; updateContextBar(); } });
+        document.getElementById('upload-btn').addEventListener('click', () => { document.getElementById('file-input').click(); });
+        document.getElementById('file-input').addEventListener('change', function() { const files = Array.from(this.files); if(files.length === 0) return; files.forEach(file => { const reader = new FileReader(); reader.onload = (e) => { pendingFiles.push({ name: file.name, type: file.type, data: e.target.result }); updateContextBar(); }; reader.readAsDataURL(file); }); this.value = ''; });
         window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
-
         const ctxMenu = document.getElementById('context-menu'); let selectedMsgData = null;
         function showContext(e, data) { e.preventDefault(); selectedMsgData = data; const rect = chatUi.getBoundingClientRect(); let x = e.pageX; let y = e.pageY; if (y + 100 > window.innerHeight) y -= 100; ctxMenu.style.display = 'flex'; ctxMenu.style.left = x + 'px'; ctxMenu.style.top = y + 'px'; }
         document.getElementById('ctx-reply').addEventListener('click', () => { if(selectedMsgData) { currentReply = selectedMsgData; updateContextBar(); document.getElementById('msg-input').focus(); } ctxMenu.style.display = 'none'; });
