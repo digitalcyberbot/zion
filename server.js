@@ -14,7 +14,8 @@ try { dns.setServers(['8.8.8.8', '8.8.4.4']); } catch (e) { console.log("DNS set
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
-const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://admin:Maximum2Rumba@zion0.0kybtmc.mongodb.net/?appName=Zion0";
+require('dotenv').config(); // Load the .env file
+const MONGO_URI = process.env.MONGO_URI;
 let isDbConnected = false;
 
 mongoose.connect(MONGO_URI)
