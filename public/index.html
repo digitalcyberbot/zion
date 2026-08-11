@@ -219,7 +219,6 @@
             <span id="minimized-text">Messages</span>
             <span style="font-size:1.5rem;">+</span>
         </div>
-        <div id="loading-screen"><div class="spinner"></div></div>
         <div class="chat-header">
             <div class="header-left-group">
                 <button class="header-icon-btn" onclick="toggleMinMax('min')" title="Minimize">🟡</button>
@@ -295,12 +294,25 @@
             return `rgba(${r}, ${g}, ${b}, ${alpha})`;
         }
         function adjustBrightness(col, amt) {
-            let usePound = false; if (col[0] == "#") { col = col.slice(1); usePound = true; }
-            let num = parseInt(col, 16);
-            let r = (num >> 16) + amt; if (r > 255) r = 255; else if (r < 0) r = 0;
-            let b = ((num >> 8) & 0x00FF) + amt; if (b > 255) b = 255; else if (b < 0) b = 0;
-            let g = (num & 0x0000FF) + amt; if (g > 255) g = 255; else if (g < 0) g = 0;
-            return (usePound ? "#" : "") + (g | (b << 8) | (r << 16)).toString(16);
+            const usePound = col.startsWith('#');
+            const hex = usePound ? col.slice(1) : col;
+            const num = parseInt(hex, 16);
+            if (Number.isNaN(num)) return col;
+            const clamp = (value) => Math.max(0, Math.min(255, value));
+            const r = clamp((num >> 16) + amt);
+            const g = clamp(((num >> 8) & 0x00FF) + amt);
+            const b = clamp((num & 0x0000FF) + amt);
+            const adjusted = ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
+            return `${usePound ? '#' : ''}${adjusted}`;
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
         }
 
         const state = { currentUser: null, users: {}, history: [], chatContext: 'public', dmContacts: new Set(), unread: {}, pinned: [] };
@@ -354,20 +366,28 @@
         };
 
         document.getElementById('search-input').addEventListener('input', (e) => {
-            const term = e.target.value.toLowerCase();
+            const term = e.target.value.trim().toLowerCase();
             const visibleGroups = Array.from(document.querySelectorAll('.msg-group'));
-            const notifs = [document.getElementById('new-msg-notification'), document.querySelector('.new-msg-divider')];
-            notifs.forEach(n => { if(n) n.style.display = term === '' ? 'block' : 'none'; });
-            if (term === '') { filterChatWindow(); return; }
+            const newMsgNotification = document.getElementById('new-msg-notification');
+            const divider = document.querySelector('.new-msg-divider');
+            newMsgNotification.style.display = term === '' && unreadCount > 0 && !isMinimized ? 'block' : 'none';
+            if (divider) divider.style.display = term === '' ? 'flex' : 'none';
+
             visibleGroups.forEach(g => {
-                const isDM = g.dataset.isDm === 'true'; const dmPartner = g.dataset.dmPartner;
-                let inContext = (state.chatContext === 'public' && !isDM) || (isDM && dmPartner === state.chatContext);
-                if (inContext) {
-                    const bubbles = g.querySelectorAll('.message-bubble span'); 
-                    let match = false;
-                    bubbles.forEach(b => { if (b.innerText.toLowerCase().includes(term)) match = true; });
-                    g.style.display = match ? 'flex' : 'none'; 
-                } else { g.style.display = 'none'; }
+                const isDM = g.dataset.isDm === 'true';
+                const dmPartner = g.dataset.dmPartner;
+                const inContext = (state.chatContext === 'public' && !isDM) || (isDM && dmPartner === state.chatContext);
+                if (!inContext) {
+                    g.style.display = 'none';
+                    return;
+                }
+                if (term === '') {
+                    g.style.display = 'flex';
+                    return;
+                }
+                const bubbles = Array.from(g.querySelectorAll('.message-bubble'));
+                const match = bubbles.some(bubble => bubble.innerText.toLowerCase().includes(term));
+                g.style.display = match ? 'flex' : 'none';
             });
         });
 
@@ -432,6 +452,7 @@
             
             chatWindow.innerHTML = ''; 
             state.history = [];
+            isLoadingHistory = false;
             lastSenderId = null; lastMessageTime = 0; currentGroup = null;
             socket.emit('loadMoreMessages', { context: 'public' });
         };
@@ -453,6 +474,7 @@
             
             chatWindow.innerHTML = '';
             state.history = [];
+            isLoadingHistory = false;
             lastSenderId = null; lastMessageTime = 0; currentGroup = null;
             socket.emit('loadMoreMessages', { context: targetUsername });
         };
@@ -476,19 +498,38 @@
         }
 
         function updateDMList() {
-            const list = document.getElementById('dm-list'); list.innerHTML = '';
+            const list = document.getElementById('dm-list');
+            list.innerHTML = '';
             state.dmContacts.forEach(contactName => {
-                let u = Object.values(state.users).find(u => u.username === contactName);
-                if (!u) { const msg = state.history.find(m => m.user === contactName); const c = msg && msg.userColor ? msg.userColor : '#666'; u = { pfp: msg ? msg.userPfp : '', color: c }; }
-                const pfp = getDisplayPfp(u);
-                const item = document.createElement('div'); item.className = 'dm-item';
-                const count = state.unread[contactName] || 0;
-                const dot = count > 0 ? `<div style="width:8px; height:8px; background:red; border-radius:50%; margin-left:auto;"></div>` : '';
-                item.innerHTML = `<img class="dm-item-pfp" src="${pfp}" onerror="this.src='${getDisplayPfp(u.color)}'"><span>${contactName}</span>${dot}`;
-                item.onclick = () => { 
-                    switchToDMChat(contactName); 
-                    document.getElementById('dm-panel').classList.remove('open'); 
-                }; 
+                let u = Object.values(state.users).find(user => user.username === contactName);
+                if (!u) {
+                    const msg = state.history.find(m => m.user === contactName || m.toUser === contactName);
+                    const c = msg && msg.userColor ? msg.userColor : '#666';
+                    u = { pfp: msg && msg.user === contactName ? msg.userPfp : '', color: c };
+                }
+
+                const item = document.createElement('div');
+                item.className = 'dm-item';
+
+                const img = document.createElement('img');
+                img.className = 'dm-item-pfp';
+                img.src = getDisplayPfp(u);
+                img.onerror = () => { img.src = getDisplayPfp(u.color); };
+
+                const name = document.createElement('span');
+                name.innerText = contactName;
+                item.append(img, name);
+
+                if ((state.unread[contactName] || 0) > 0) {
+                    const dot = document.createElement('div');
+                    dot.style.cssText = 'width:8px;height:8px;background:red;border-radius:50%;margin-left:auto;';
+                    item.appendChild(dot);
+                }
+
+                item.onclick = () => {
+                    switchToDMChat(contactName);
+                    document.getElementById('dm-panel').classList.remove('open');
+                };
                 list.appendChild(item);
             });
         }
@@ -504,7 +545,9 @@
                 const item = document.createElement('div'); item.className = 'pinned-item';
                 const header = document.createElement('div'); header.className = 'pinned-header';
                 const safeTime = msg.timestamp ? new Date(msg.timestamp).getTime() : Date.now();
-                header.innerHTML = `<span class="pinned-sender">${msg.user}</span><span class="msg-timestamp" data-ts="${safeTime}">${getDynamicTime(safeTime)}</span>`;
+                const sender = document.createElement('span'); sender.className = 'pinned-sender'; sender.innerText = msg.user || '';
+                const timestamp = document.createElement('span'); timestamp.className = 'msg-timestamp'; timestamp.dataset.ts = safeTime; timestamp.innerText = getDynamicTime(safeTime);
+                header.append(sender, timestamp);
                 const body = document.createElement('div'); body.className = 'pinned-text';
                 if(msg.files && msg.files.length > 0) body.innerText = "[Attachment]"; else body.innerText = msg.text || "";
                 item.appendChild(header); item.appendChild(body);
@@ -526,20 +569,48 @@
         socket.on('userProfileData', (user) => { if(user) openProfile(user); else alert("User data not found."); });
 
         function parseMessageText(text) {
-            if(!text) return '';
+            if (!text) return '';
             const urlRegex = /(https?:\/\/[^\s]+)/g;
-            return text.replace(urlRegex, (url) => `<a href="${url}" target="_blank" style="color:white; text-decoration:underline;">${url}</a>`);
+            let result = '';
+            let lastIndex = 0;
+            for (const match of text.matchAll(urlRegex)) {
+                const url = match[0];
+                const index = match.index ?? 0;
+                result += escapeHtml(text.slice(lastIndex, index));
+                const safeUrl = escapeHtml(url);
+                result += `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="color:white; text-decoration:underline;">${safeUrl}</a>`;
+                lastIndex = index + url.length;
+            }
+            return result + escapeHtml(text.slice(lastIndex));
         }
 
         function generateLinkPreview(text) {
-            const urlRegex = /(https?:\/\/[^\s]+)/g; const match = text.match(urlRegex);
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            const match = text.match(urlRegex);
             if (!match) return null;
+
             const url = match[0];
-            const isImage = /\.(jpeg|jpg|gif|png)$/i.test(url);
-            const isYoutube = /(youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/.test(url);
-            if (isImage) { return `<a href="${url}" target="_blank"><img src="${url}" style="max-width:100%; border-radius:8px; margin-top:5px;"></a>`; }
-            else if (isYoutube) { const id = url.match(/(youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/)[2]; return `<iframe width="100%" height="200" src="https://www.youtube.com/embed/${id}" frameborder="0" allowfullscreen style="border-radius:8px; margin-top:5px;"></iframe>`; }
-            else { let domain = ''; try { domain = new URL(url).hostname; } catch(e){} return `<a href="${url}" target="_blank" class="link-card"><div class="link-icon">🔗</div><div class="link-info"><div class="link-title">${domain || 'Link'}</div><div class="link-url">${url}</div></div></a>`; }
+            let parsedUrl;
+            try {
+                parsedUrl = new URL(url);
+                if (!['http:', 'https:'].includes(parsedUrl.protocol)) return null;
+            } catch (e) {
+                return null;
+            }
+
+            const safeUrl = escapeHtml(url);
+            const safeDomain = escapeHtml(parsedUrl.hostname || 'Link');
+            const isImage = /\.(jpeg|jpg|gif|png)(?:[?#].*)?$/i.test(url);
+            const youtubeMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/);
+
+            if (isImage) {
+                return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer"><img src="${safeUrl}" style="max-width:100%; border-radius:8px; margin-top:5px;"></a>`;
+            }
+            if (youtubeMatch) {
+                const id = youtubeMatch[1];
+                return `<iframe width="100%" height="200" src="https://www.youtube.com/embed/${id}" frameborder="0" allowfullscreen style="border-radius:8px; margin-top:5px;"></iframe>`;
+            }
+            return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="link-card"><div class="link-icon">🔗</div><div class="link-info"><div class="link-title">${safeDomain}</div><div class="link-url">${safeUrl}</div></div></a>`;
         }
 
         function addMessageToUI(data, isSelf, prepend = false) {
@@ -581,15 +652,8 @@
                 // Stack if same user AND less than 5 mins (300000ms) difference
                 const canStack = (data.user === lastSenderId) && (timeDiff < 300000) && (isDM === prevWasDM) && currentGroup;
 
-                if (prepend) {
-                    const firstGroup = chatWindow.firstElementChild;
-                    if (firstGroup && firstGroup.classList.contains('msg-group')) {
-                        const firstGroupUser = firstGroup.dataset.sender;
-                        if (firstGroupUser === data.user) groupToStack = firstGroup;
-                    }
-                } else {
-                    if (canStack) groupToStack = currentGroup;
-                }
+                // Keep prepended history in separate groups so chronological order is preserved.
+                if (!prepend && canStack) groupToStack = currentGroup;
 
                 if (!groupToStack) {
                     groupToStack = document.createElement('div'); 
@@ -625,7 +689,8 @@
                 
                 if(data.replyTo) {
                     const r = document.createElement('div'); r.className = 'reply-preview';
-                    r.innerHTML = `<strong>${data.replyTo.user}</strong>: ${data.replyTo.text || '[Attachment]'}`;
+                    const replyUser = document.createElement('strong'); replyUser.innerText = data.replyTo.user || '';
+                    r.append(replyUser, document.createTextNode(`: ${data.replyTo.text || '[Attachment]'}`));
                     r.onclick = (e) => { e.stopPropagation(); scrollToMessage(data.replyTo.msgId || data.replyTo._id); };
                     bubble.appendChild(r);
                 }
@@ -641,7 +706,7 @@
                         if (file.type && file.type.startsWith('image/')) { const img = document.createElement('img'); img.src = file.data; img.className = 'msg-img'; bubble.appendChild(img); }
                         else if (file.type && file.type.startsWith('video/')) { const vid = document.createElement('video'); vid.src = file.data; vid.className = 'msg-video'; vid.controls = true; bubble.appendChild(vid); }
                         else if (file.type && file.type.startsWith('audio/')) { const aud = document.createElement('audio'); aud.src = file.data; aud.className = 'msg-audio'; aud.controls = true; bubble.appendChild(aud); }
-                        else { let iconChar = '📁'; const fileDiv = document.createElement('div'); fileDiv.className = 'msg-file-icon'; fileDiv.innerHTML = `${iconChar} ${file.name}`; fileDiv.style.cursor = 'pointer'; fileDiv.onclick = () => { const a = document.createElement('a'); a.href = file.data; a.download = file.name; a.click(); }; bubble.appendChild(fileDiv); }
+                        else { const iconChar = '📁'; const fileDiv = document.createElement('div'); fileDiv.className = 'msg-file-icon'; fileDiv.innerText = `${iconChar} ${file.name || 'Attachment'}`; fileDiv.style.cursor = 'pointer'; fileDiv.onclick = () => { const a = document.createElement('a'); a.href = file.data; a.download = file.name || 'attachment'; a.click(); }; bubble.appendChild(fileDiv); }
                     });
                 }
 
@@ -742,6 +807,7 @@
             socket.on('history', (history) => { state.history = history; if(state.currentUser) renderHistory(state.history, state.currentUser.username); });
             
             socket.on('moreHistory', (messages) => {
+                isLoadingHistory = false;
                 if(messages.length === 0) return;
                 const oldHeight = chatWindow.scrollHeight;
                 state.history = [...messages, ...state.history];
@@ -749,7 +815,6 @@
                     addMessageToUI(messages[i], messages[i].user === state.currentUser.username, true);
                 }
                 chatWindow.scrollTop = chatWindow.scrollHeight - oldHeight;
-                isLoadingHistory = false;
             });
 
             socket.on('contextHistory', ({ messages, targetId }) => {

@@ -1,42 +1,33 @@
 // server.js
 require('dotenv').config();
+
 const express = require('express');
-const app = express();
-const http = require('http').createServer(app);
-const io = require('socket.io')(http, { maxHttpBufferSize: 1e8, cors: { origin: "*" } });
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const dns = require('dns');
 const path = require('path');
 
-try { dns.setServers(['8.8.8.8', '8.8.4.4']); } catch (e) { console.log("DNS settings skipped"); }
+const app = express();
+const http = require('http').createServer(app);
+const io = require('socket.io')(http, {
+    maxHttpBufferSize: 1e8,
+    cors: { origin: '*' }
+});
+
+try {
+    dns.setServers(['8.8.8.8', '8.8.4.4']);
+} catch (e) {
+    console.log('DNS settings skipped');
+}
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
-
-require('dotenv').config(); // Load the .env file
-const MONGO_URI = process.env.MONGO_URI;
-let isDbConnected = false;
-
-mongoose.connect(MONGO_URI)
-    .then(async () => {
-        console.log('✅ Connected to MongoDB (Online Mode)');
-        isDbConnected = true;
-        try {
-            const pins = await Message.find({ isPinned: true }).sort({ timestamp: 1 });
-            pinnedMessages = pins;
-        } catch (e) { console.error("Failed to load pins:", e); }
-    })
-    .catch(err => {
-        console.log('⚡ Starting in OFFLINE MODE');
-        isDbConnected = false;
-    });
 
 const UserSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     color: { type: String, default: '#007AFF' },
-    pfp: { type: String, default: '' }, 
+    pfp: { type: String, default: '' },
     bio: { type: String, default: 'No bio written.' },
     location: { type: String, default: 'Unknown' },
     status: { type: String, default: 'Online' },
@@ -65,14 +56,24 @@ const MessageSchema = new mongoose.Schema({
 const User = mongoose.model('User', UserSchema);
 const Message = mongoose.model('Message', MessageSchema);
 
-let localUsers = {}; 
-let activeUsers = {}; 
-let pinnedMessages = []; 
-let chatHistory = []; 
+const PROFILE_FIELDS = new Set([
+    'color', 'pfp', 'bio', 'location', 'status',
+    'bgImage', 'font', 'textColor', 'customCss'
+]);
 
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+let localUsers = {};
+let activeUsers = {};
+let pinnedMessages = [];
+let chatHistory = [];
+let isDbConnected = false;
+
+function normalizeId(value) {
+    return value == null ? '' : String(value);
+}
+
+function isMongoId(value) {
+    return /^[a-f\d]{24}$/i.test(normalizeId(value));
+}
 
 function getContextQuery(context, currentUser) {
     if (context === 'public') return { toUser: null };
@@ -84,11 +85,72 @@ function getContextQuery(context, currentUser) {
     };
 }
 
-io.on('connection', async (socket) => {
-    socket.emit('updatePinned', pinnedMessages);
-    
-    socket.on('login', async ({ username, password }) => {
+function messageMatchesContext(message, context, currentUser) {
+    if (context === 'public') return !message.toUser;
+    return (
+        (message.user === currentUser && message.toUser === context) ||
+        (message.user === context && message.toUser === currentUser)
+    );
+}
+
+function canUserSeeMessage(message, username) {
+    return !message.toUser || message.user === username || message.toUser === username;
+}
+
+function visiblePinsFor(username) {
+    return pinnedMessages.filter(message => canUserSeeMessage(message, username));
+}
+
+function emitPinnedUpdates() {
+    for (const [socketId, user] of Object.entries(activeUsers)) {
+        io.to(socketId).emit('updatePinned', visiblePinsFor(user.username));
+    }
+}
+
+function sanitizeProfileUpdate(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return {};
+    const clean = {};
+    for (const field of PROFILE_FIELDS) {
+        if (Object.prototype.hasOwnProperty.call(data, field)) clean[field] = data[field];
+    }
+    return clean;
+}
+
+async function connectDatabase() {
+    const mongoUri = process.env.MONGO_URI;
+    if (!mongoUri) {
+        console.log('⚡ Starting in OFFLINE MODE (MONGO_URI not configured)');
+        return;
+    }
+
+    try {
+        await mongoose.connect(mongoUri);
+        isDbConnected = true;
+        console.log('✅ Connected to MongoDB (Online Mode)');
+        pinnedMessages = await Message.find({ isPinned: true }).sort({ timestamp: 1 }).lean();
+    } catch (err) {
+        console.log('⚡ Starting in OFFLINE MODE');
+        isDbConnected = false;
+    }
+}
+
+connectDatabase();
+
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+io.on('connection', (socket) => {
+    socket.on('login', async (credentials = {}) => {
         try {
+            const username = typeof credentials.username === 'string' ? credentials.username.trim() : '';
+            const password = typeof credentials.password === 'string' ? credentials.password : '';
+
+            if (!username || !password) {
+                socket.emit('loginError', 'Username and password are required');
+                return;
+            }
+
             let userData = null;
             let isNewAccount = false;
 
@@ -96,185 +158,373 @@ io.on('connection', async (socket) => {
                 let user = await User.findOne({ username });
                 if (user) {
                     const isMatch = await bcrypt.compare(password, user.password);
-                    if (!isMatch) { socket.emit('loginError', 'Incorrect password'); return; }
+                    if (!isMatch) {
+                        socket.emit('loginError', 'Incorrect password');
+                        return;
+                    }
                     userData = user;
                 } else {
                     const hashed = await bcrypt.hash(password, 10);
                     const newUser = new User({
-                        username, password: hashed,
-                        x: (Math.random()*60)-30, y: (Math.random()*20)+5, z: (Math.random()*30)-20
+                        username,
+                        password: hashed,
+                        x: (Math.random() * 60) - 30,
+                        y: (Math.random() * 20) + 5,
+                        z: (Math.random() * 30) - 20
                     });
                     userData = await newUser.save();
                     isNewAccount = true;
                 }
-            } else {
-                if (localUsers[username]) {
-                    const isMatch = await bcrypt.compare(password, localUsers[username].password);
-                    if (!isMatch) { socket.emit('loginError', 'Incorrect password (Offline)'); return; }
-                    userData = localUsers[username];
-                } else {
-                    const hashed = await bcrypt.hash(password, 10);
-                    userData = {
-                        username, password: hashed,
-                        color: '#007AFF', pfp: '',
-                        x: (Math.random()*60)-30, y: (Math.random()*20)+5, z: (Math.random()*30)-20,
-                        bio: 'No bio.', location: 'Unknown', status: 'Online',
-                        bgImage: '', font: 'sans-serif', textColor: '#ffffff', customCss: ''
-                    };
-                    localUsers[username] = userData;
-                    isNewAccount = true;
+            } else if (localUsers[username]) {
+                const isMatch = await bcrypt.compare(password, localUsers[username].password);
+                if (!isMatch) {
+                    socket.emit('loginError', 'Incorrect password (Offline)');
+                    return;
                 }
+                userData = localUsers[username];
+            } else {
+                const hashed = await bcrypt.hash(password, 10);
+                userData = {
+                    username,
+                    password: hashed,
+                    color: '#007AFF',
+                    pfp: '',
+                    x: (Math.random() * 60) - 30,
+                    y: (Math.random() * 20) + 5,
+                    z: (Math.random() * 30) - 20,
+                    bio: 'No bio.',
+                    location: 'Unknown',
+                    status: 'Online',
+                    bgImage: '',
+                    font: 'sans-serif',
+                    textColor: '#ffffff',
+                    customCss: ''
+                };
+                localUsers[username] = userData;
+                isNewAccount = true;
+            }
+
+            const previousUser = activeUsers[socket.id];
+            if (previousUser && previousUser.username !== userData.username) {
+                socket.leave(previousUser.username);
             }
 
             socket.join(userData.username);
-            activeUsers[socket.id] = { ... (userData.toObject ? userData.toObject() : userData), windowFocus: true };
-            if(!activeUsers[socket.id].color) activeUsers[socket.id].color = '#007AFF';
+            const plainUser = userData.toObject ? userData.toObject() : userData;
+            activeUsers[socket.id] = { ...plainUser, windowFocus: true };
+            if (!activeUsers[socket.id].color) activeUsers[socket.id].color = '#007AFF';
+            delete activeUsers[socket.id].password;
 
             let dmContacts = [];
-            if(isDbConnected) {
-                const sent = await Message.distinct("toUser", { user: userData.username, toUser: { $ne: null } });
-                const received = await Message.distinct("user", { toUser: userData.username });
+            if (isDbConnected) {
+                const sent = await Message.distinct('toUser', { user: userData.username, toUser: { $ne: null } });
+                const received = await Message.distinct('user', { toUser: userData.username });
                 dmContacts = [...new Set([...sent, ...received])];
             } else {
-                // Offline fallback
                 const sent = chatHistory.filter(m => m.user === userData.username && m.toUser).map(m => m.toUser);
                 const received = chatHistory.filter(m => m.toUser === userData.username).map(m => m.user);
                 dmContacts = [...new Set([...sent, ...received])];
             }
 
-            socket.emit('loginSuccess', { user: activeUsers[socket.id], contacts: dmContacts }); 
+            socket.emit('loginSuccess', { user: activeUsers[socket.id], contacts: dmContacts });
+            socket.emit('updatePinned', visiblePinsFor(userData.username));
             io.emit('updateUsers', activeUsers);
-            
+
             if (isDbConnected) {
                 try {
-                    const history = await Message.find({ toUser: null }).sort({ timestamp: -1 }).limit(20); 
+                    const history = await Message.find({ toUser: null }).sort({ timestamp: -1 }).limit(20).lean();
                     socket.emit('history', history.reverse());
-                } catch (e) { console.error(e); }
+                } catch (e) {
+                    console.error(e);
+                }
             } else {
-                socket.emit('history', chatHistory);
+                const publicHistory = chatHistory.filter(m => !m.toUser).slice(-20);
+                socket.emit('history', publicHistory);
             }
 
             if (isNewAccount) {
-                const sysMsgData = { user: 'System', text: `${userData.username} has registered a new account`, type: 'bot', timestamp: Date.now() };
-                if (isDbConnected) { const m = new Message(sysMsgData); await m.save(); }
-                io.emit('chatMessage', { ...sysMsgData, msgId: Date.now() + Math.random(), toUser: null });
-            }
+                const sysMsgData = {
+                    user: 'System',
+                    text: `${userData.username} has registered a new account`,
+                    type: 'bot',
+                    timestamp: Date.now(),
+                    toUser: null
+                };
 
+                let emitData = { ...sysMsgData, msgId: Date.now() + Math.random() };
+                if (isDbConnected) {
+                    const saved = await new Message(sysMsgData).save();
+                    emitData = { ...sysMsgData, msgId: saved._id };
+                } else {
+                    chatHistory.push(emitData);
+                    if (chatHistory.length > 50) chatHistory.shift();
+                }
+                io.emit('chatMessage', emitData);
+            }
         } catch (e) {
             console.error(e);
             socket.emit('loginError', 'Server error');
         }
     });
 
-    socket.on('loadMoreMessages', async ({ context, lastTimestamp }) => {
-        if (!isDbConnected || !activeUsers[socket.id]) return;
+    socket.on('loadMoreMessages', async ({ context = 'public', lastTimestamp } = {}) => {
+        const currentUser = activeUsers[socket.id];
+        if (!currentUser) return;
+
         try {
-            const currentUser = activeUsers[socket.id].username;
-            const query = getContextQuery(context, currentUser);
-            if (lastTimestamp) query.timestamp = { $lt: new Date(lastTimestamp) };
-            const moreMessages = await Message.find(query).sort({ timestamp: -1 }).limit(20);
-            socket.emit('moreHistory', moreMessages.reverse());
-        } catch (e) { console.error(e); }
+            let moreMessages;
+            if (isDbConnected) {
+                const query = getContextQuery(context, currentUser.username);
+                if (lastTimestamp) query.timestamp = { $lt: new Date(lastTimestamp) };
+                moreMessages = await Message.find(query).sort({ timestamp: -1 }).limit(20).lean();
+                moreMessages.reverse();
+            } else {
+                const cutoff = lastTimestamp ? new Date(lastTimestamp).getTime() : Infinity;
+                moreMessages = chatHistory
+                    .filter(message => messageMatchesContext(message, context, currentUser.username))
+                    .filter(message => new Date(message.timestamp).getTime() < cutoff)
+                    .slice(-20);
+            }
+            socket.emit('moreHistory', moreMessages);
+        } catch (e) {
+            console.error(e);
+            socket.emit('moreHistory', []);
+        }
     });
 
-    socket.on('loadContext', async ({ context, msgId }) => {
-        if (!isDbConnected || !activeUsers[socket.id]) return;
+    socket.on('loadContext', async ({ context = 'public', msgId } = {}) => {
+        const currentUser = activeUsers[socket.id];
+        if (!currentUser || !msgId) return;
+
         try {
-            const currentUser = activeUsers[socket.id].username;
-            const query = getContextQuery(context, currentUser);
-            const targetMsg = await Message.findOne({ _id: msgId });
-            if(!targetMsg) return;
-            const before = await Message.find({ ...query, timestamp: { $lt: targetMsg.timestamp } }).sort({ timestamp: -1 }).limit(10);
-            const after = await Message.find({ ...query, timestamp: { $gt: targetMsg.timestamp } }).sort({ timestamp: 1 }).limit(10);
-            const combined = [...before.reverse(), targetMsg, ...after];
-            socket.emit('contextHistory', { messages: combined, targetId: msgId });
-        } catch(e) { console.error(e); }
+            if (isDbConnected) {
+                const query = getContextQuery(context, currentUser.username);
+                const targetMsg = await Message.findOne({ ...query, _id: msgId }).lean();
+                if (!targetMsg) return;
+
+                const before = await Message.find({ ...query, timestamp: { $lt: targetMsg.timestamp } })
+                    .sort({ timestamp: -1 }).limit(10).lean();
+                const after = await Message.find({ ...query, timestamp: { $gt: targetMsg.timestamp } })
+                    .sort({ timestamp: 1 }).limit(10).lean();
+                socket.emit('contextHistory', {
+                    messages: [...before.reverse(), targetMsg, ...after],
+                    targetId: msgId
+                });
+            } else {
+                const contextMessages = chatHistory.filter(message =>
+                    messageMatchesContext(message, context, currentUser.username)
+                );
+                const targetIndex = contextMessages.findIndex(message =>
+                    normalizeId(message.msgId || message._id) === normalizeId(msgId)
+                );
+                if (targetIndex === -1) return;
+                const start = Math.max(0, targetIndex - 10);
+                const end = Math.min(contextMessages.length, targetIndex + 11);
+                socket.emit('contextHistory', {
+                    messages: contextMessages.slice(start, end),
+                    targetId: msgId
+                });
+            }
+        } catch (e) {
+            console.error(e);
+        }
     });
 
     socket.on('updateProfile', async (data) => {
-        const u = activeUsers[socket.id];
-        if (u) {
-            Object.assign(u, data);
-            if (isDbConnected) await User.updateOne({ username: u.username }, data);
+        const user = activeUsers[socket.id];
+        if (!user) return;
+
+        try {
+            const updates = sanitizeProfileUpdate(data);
+            if (Object.keys(updates).length === 0) return;
+
+            Object.assign(user, updates);
+            if (isDbConnected) {
+                await User.updateOne({ username: user.username }, { $set: updates });
+            } else if (localUsers[user.username]) {
+                Object.assign(localUsers[user.username], updates);
+            }
             io.emit('updateUsers', activeUsers);
+        } catch (e) {
+            console.error('Failed to update profile:', e);
         }
     });
 
     socket.on('getUserProfile', async (targetUsername) => {
         try {
-            const active = Object.values(activeUsers).find(u => u.username === targetUsername);
-            if (active) { socket.emit('userProfileData', { ...active, status: 'Online' }); return; }
-            let userRecord = null;
-            if (isDbConnected) userRecord = await User.findOne({ username: targetUsername }).select('-password');
-            else userRecord = localUsers[targetUsername];
-            if (userRecord) socket.emit('userProfileData', { ... (userRecord.toObject ? userRecord.toObject() : userRecord), status: 'Offline' });
-            else socket.emit('userProfileData', null);
-        } catch(e) { socket.emit('userProfileData', null); }
-    });
-
-    socket.on('userFocus', (isFocused) => {
-        const u = activeUsers[socket.id];
-        if(u) { u.windowFocus = isFocused; socket.broadcast.emit('updateUserStatus', { username: u.username, windowFocus: isFocused }); }
-    });
-
-    socket.on('chatMessage', async (data) => {
-        const currentUser = activeUsers[socket.id];
-        if (currentUser) {
-            const msgData = {
-                user: currentUser.username,
-                userPfp: currentUser.pfp, 
-                userColor: currentUser.color || '#007AFF',
-                toUser: data.toUser || null,
-                text: data.text || null,
-                files: data.files || [],
-                replyTo: data.replyTo || null,
-                type: 'user',
-                timestamp: Date.now()
-            };
-            let savedMsgId = Date.now() + Math.random();
-            if (isDbConnected) {
-                const newMsg = new Message(msgData);
-                const saved = await newMsg.save();
-                savedMsgId = saved._id;
+            if (typeof targetUsername !== 'string' || !targetUsername) {
+                socket.emit('userProfileData', null);
+                return;
             }
-            const emitData = { ...msgData, msgId: savedMsgId };
-            chatHistory.push(emitData);
-            if (chatHistory.length > 50) chatHistory.shift();
-            if (msgData.toUser) { io.to(currentUser.username).to(msgData.toUser).emit('chatMessage', emitData); } 
-            else { io.emit('chatMessage', emitData); }
+
+            const active = Object.values(activeUsers).find(u => u.username === targetUsername);
+            if (active) {
+                socket.emit('userProfileData', { ...active, status: 'Online' });
+                return;
+            }
+
+            let userRecord = null;
+            if (isDbConnected) {
+                userRecord = await User.findOne({ username: targetUsername }).select('-password').lean();
+            } else if (localUsers[targetUsername]) {
+                const { password, ...safeUser } = localUsers[targetUsername];
+                userRecord = safeUser;
+            }
+
+            if (userRecord) socket.emit('userProfileData', { ...userRecord, status: 'Offline' });
+            else socket.emit('userProfileData', null);
+        } catch (e) {
+            socket.emit('userProfileData', null);
         }
     });
 
-    socket.on('typing', () => { const u = activeUsers[socket.id]; if(u) socket.broadcast.emit('userTyping', u.username); });
-    socket.on('stopTyping', () => { const u = activeUsers[socket.id]; if(u) socket.broadcast.emit('userStoppedTyping', u.username); });
+    socket.on('userFocus', (isFocused) => {
+        const user = activeUsers[socket.id];
+        if (user) {
+            user.windowFocus = Boolean(isFocused);
+            socket.broadcast.emit('updateUserStatus', {
+                username: user.username,
+                windowFocus: user.windowFocus
+            });
+        }
+    });
 
-    socket.on('pinMessage', async (msgData) => {
-        const idToCheck = msgData._id || msgData.msgId;
-        const exists = pinnedMessages.find(m => (m._id === idToCheck) || (m.msgId === idToCheck));
-        const u = activeUsers[socket.id];
-        if(!exists && u) {
-            const pinData = { ...msgData, pinnedBy: u.username, isPinned: true };
-            pinnedMessages.push(pinData);
-            if(pinnedMessages.length > 50) pinnedMessages.shift();
-            if(isDbConnected && idToCheck && idToCheck.length === 24) await Message.updateOne({ _id: idToCheck }, { isPinned: true });
-            io.emit('updatePinned', pinnedMessages);
-            if(!msgData.toUser) {
-                const sysMsgData = { user: 'System', text: `${u.username} pinned a message`, type: 'bot', timestamp: Date.now() };
-                io.emit('chatMessage', { ...sysMsgData, msgId: Date.now(), toUser: null });
+    socket.on('chatMessage', async (data = {}) => {
+        const currentUser = activeUsers[socket.id];
+        if (!currentUser) return;
+
+        try {
+            const msgData = {
+                user: currentUser.username,
+                userPfp: currentUser.pfp,
+                userColor: currentUser.color || '#007AFF',
+                toUser: typeof data.toUser === 'string' && data.toUser ? data.toUser : null,
+                text: typeof data.text === 'string' && data.text ? data.text : null,
+                files: Array.isArray(data.files) ? data.files : [],
+                replyTo: data.replyTo && typeof data.replyTo === 'object' ? data.replyTo : null,
+                type: 'user',
+                timestamp: Date.now()
+            };
+
+            if (!msgData.text && msgData.files.length === 0) return;
+
+            let savedMsgId = Date.now() + Math.random();
+            if (isDbConnected) {
+                const saved = await new Message(msgData).save();
+                savedMsgId = saved._id;
             }
+
+            const emitData = { ...msgData, msgId: savedMsgId };
+            chatHistory.push(emitData);
+            if (chatHistory.length > 50) chatHistory.shift();
+
+            if (msgData.toUser) {
+                io.to(currentUser.username).to(msgData.toUser).emit('chatMessage', emitData);
+            } else {
+                io.emit('chatMessage', emitData);
+            }
+        } catch (e) {
+            console.error('Failed to send message:', e);
+        }
+    });
+
+    socket.on('typing', () => {
+        const user = activeUsers[socket.id];
+        if (user) socket.broadcast.emit('userTyping', user.username);
+    });
+
+    socket.on('stopTyping', () => {
+        const user = activeUsers[socket.id];
+        if (user) socket.broadcast.emit('userStoppedTyping', user.username);
+    });
+
+    socket.on('pinMessage', async (msgData = {}) => {
+        const user = activeUsers[socket.id];
+        if (!user) return;
+
+        const idToCheck = msgData._id || msgData.msgId;
+        if (!idToCheck) return;
+        const normalizedId = normalizeId(idToCheck);
+
+        try {
+            const exists = pinnedMessages.some(message =>
+                normalizeId(message._id || message.msgId) === normalizedId
+            );
+            if (exists) return;
+
+            let canonicalMessage = null;
+            if (isDbConnected && isMongoId(normalizedId)) {
+                canonicalMessage = await Message.findById(normalizedId).lean();
+            } else {
+                canonicalMessage = chatHistory.find(message =>
+                    normalizeId(message._id || message.msgId) === normalizedId
+                );
+            }
+
+            if (!canonicalMessage || !canUserSeeMessage(canonicalMessage, user.username)) return;
+
+            const pinData = {
+                ...canonicalMessage,
+                msgId: canonicalMessage.msgId || canonicalMessage._id || idToCheck,
+                pinnedBy: user.username,
+                isPinned: true
+            };
+            pinnedMessages.push(pinData);
+            if (pinnedMessages.length > 50) pinnedMessages.shift();
+
+            if (isDbConnected && isMongoId(normalizedId)) {
+                await Message.updateOne({ _id: normalizedId }, { $set: { isPinned: true } });
+            }
+
+            emitPinnedUpdates();
+
+            if (!canonicalMessage.toUser) {
+                const sysMsgData = {
+                    user: 'System',
+                    text: `${user.username} pinned a message`,
+                    type: 'bot',
+                    timestamp: Date.now(),
+                    toUser: null
+                };
+                io.emit('chatMessage', { ...sysMsgData, msgId: Date.now() + Math.random() });
+            }
+        } catch (e) {
+            console.error('Failed to pin message:', e);
         }
     });
 
     socket.on('unpinMessage', async (msgId) => {
-        pinnedMessages = pinnedMessages.filter(m => m.msgId !== msgId && m._id !== msgId);
-        if(isDbConnected && msgId && msgId.length === 24) await Message.updateOne({ _id: msgId }, { isPinned: false });
-        io.emit('updatePinned', pinnedMessages);
+        const user = activeUsers[socket.id];
+        if (!user || !msgId) return;
+
+        const normalizedId = normalizeId(msgId);
+        const pinnedMessage = pinnedMessages.find(message =>
+            normalizeId(message._id || message.msgId) === normalizedId
+        );
+        if (!pinnedMessage || !canUserSeeMessage(pinnedMessage, user.username)) return;
+
+        try {
+            pinnedMessages = pinnedMessages.filter(message =>
+                normalizeId(message._id || message.msgId) !== normalizedId
+            );
+            if (isDbConnected && isMongoId(normalizedId)) {
+                await Message.updateOne({ _id: normalizedId }, { $set: { isPinned: false } });
+            }
+            emitPinnedUpdates();
+        } catch (e) {
+            console.error('Failed to unpin message:', e);
+        }
     });
 
-    socket.on('disconnect', async () => {
-        if (activeUsers[socket.id]) { delete activeUsers[socket.id]; io.emit('updateUsers', activeUsers); }
+    socket.on('disconnect', () => {
+        if (activeUsers[socket.id]) {
+            delete activeUsers[socket.id];
+            io.emit('updateUsers', activeUsers);
+        }
     });
 });
 
 const PORT = process.env.PORT || 3000;
-http.listen(PORT, () => { console.log(`Server running on port ${PORT}`); });
+http.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
