@@ -141,6 +141,75 @@
         #status-text { position: fixed; top: 18px; left: 40px; z-index: 200; font-size: 0.8rem; opacity: 0.7; font-weight: 500; color: white;}
         #tooltip { position: absolute; background: rgba(40, 40, 40, 0.85); backdrop-filter: blur(12px); color: white; padding: 6px 12px; border-radius: 8px; pointer-events: none; font-size: 0.85rem; font-weight: 500; display: none; z-index: 50; box-shadow: 0 4px 12px rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); }
         #temp-display { position: fixed; top: 50px; left: 20px; color: rgba(255,255,255,0.7); font-size: 0.9rem; z-index: 10; font-family: monospace; display: none; }
+        .mobile-only { display: none; }
+
+
+        /* Phone-only layout. Desktop/tablet sizing above 700px is intentionally unchanged. */
+        @media (max-width: 700px) {
+            body { overscroll-behavior: none; }
+            .mobile-only { display: inline-flex; }
+            .desktop-size-control { display: none; }
+            #profile-modal { z-index: 400; }
+            #top-controls { top: calc(10px + env(safe-area-inset-top)); right: 10px; }
+            #status-dot { top: calc(14px + env(safe-area-inset-top)); left: 12px; }
+            #status-text { top: calc(12px + env(safe-area-inset-top)); left: 30px; }
+
+            .login-card { width: calc(100vw - 32px); max-width: 360px; padding: 28px 22px; box-sizing: border-box; }
+            .profile-card {
+                position: fixed; inset: 0; width: 100%; height: 100vh; height: var(--mobile-viewport-height, 100dvh); min-height: 0; max-height: none;
+                padding: calc(22px + env(safe-area-inset-top)) 18px calc(18px + env(safe-area-inset-bottom));
+                border-radius: 0; box-sizing: border-box;
+            }
+            .close-btn { top: calc(14px + env(safe-area-inset-top)); right: 14px; min-width: 44px; min-height: 44px; }
+
+            .chat-container, .chat-container.maximized {
+                position: fixed; inset: 0; width: 100%; height: 100vh; height: var(--mobile-viewport-height, 100dvh); left: 0; bottom: 0;
+                border-radius: 0; border-left: 0; border-right: 0; transition: none;
+            }
+            .chat-container.minimized {
+                inset: auto auto max(10px, env(safe-area-inset-bottom)) 10px;
+                width: min(260px, calc(100vw - 20px)); height: 56px; border-radius: 18px; border: 1px solid var(--border-color);
+            }
+            #minimized-content { padding: 0 16px; box-sizing: border-box; }
+
+            .chat-header {
+                height: calc(52px + env(safe-area-inset-top));
+                padding: calc(6px + env(safe-area-inset-top)) 8px 6px;
+                flex-shrink: 0;
+            }
+            .header-left-group, .header-right-group { flex: 0 0 auto; gap: 2px; }
+            .header-center-group { flex: 1 1 auto; min-width: 0; padding: 0 4px; }
+            .header-icon-btn { width: 38px; height: 38px; padding: 6px; font-size: 1.1rem; touch-action: manipulation; }
+            #search-input { min-width: 0; max-width: none; padding: 8px 10px; font-size: 16px; }
+
+            #dm-banner { padding: 10px 12px; font-size: 0.82rem; flex-shrink: 0; }
+            #chat-window {
+                padding: 12px 10px; gap: 3px; -webkit-overflow-scrolling: touch;
+                overscroll-behavior-y: contain; touch-action: pan-y;
+            }
+            .msg-group { max-width: 96%; gap: 8px; margin-bottom: 10px; }
+            .msg-pfp { width: 32px; height: 32px; margin-top: 16px; }
+            .message-bubble { padding: 9px 12px; }
+            .msg-img, .msg-video { max-height: 52dvh; object-fit: contain; }
+            .msg-audio { max-width: min(280px, 72vw); }
+            .link-card iframe { max-width: 100% !important; height: auto; aspect-ratio: 16 / 9; }
+
+            .input-wrapper {
+                padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+                flex-shrink: 0;
+            }
+            .input-area { gap: 6px; }
+            #msg-input { min-width: 0; font-size: 16px; padding: 10px 12px; }
+            .icon-btn { min-width: 40px; min-height: 40px; padding: 6px; touch-action: manipulation; }
+            .send-btn { width: 40px; height: 40px; }
+            #new-msg-notification { bottom: calc(76px + env(safe-area-inset-bottom)); max-width: calc(100vw - 32px); white-space: nowrap; }
+            #typing-indicator { left: 12px; }
+
+            .side-panel { height: 100%; }
+            .panel-header { height: 52px; padding: 10px 14px; }
+            .dm-item, .pinned-item { padding: 14px 12px; }
+            #context-menu { position: fixed; max-width: calc(100vw - 24px); }
+        }
     </style>
 </head>
 <body>
@@ -222,12 +291,13 @@
         <div class="chat-header">
             <div class="header-left-group">
                 <button class="header-icon-btn" onclick="toggleMinMax('min')" title="Minimize">🟡</button>
-                <button class="header-icon-btn" onclick="toggleMinMax('max')" title="Maximize">🟢</button>
+                <button class="header-icon-btn desktop-size-control" onclick="toggleMinMax('max')" title="Maximize">🟢</button>
             </div>
             <div class="header-center-group">
                 <input id="search-input" placeholder="Search" autocomplete="off">
             </div>
             <div class="header-right-group">
+                <button class="header-icon-btn mobile-only" onclick="openProfileEditor()" title="Profile">👤</button>
                 <button class="header-icon-btn" id="dm-toggle" title="Direct Messages">✉️ <div id="dm-badge" class="notification-badge">0</div></button>
                 <button class="header-icon-btn" id="pins-toggle" title="Pinned Messages">📌</button>
             </div>
@@ -426,7 +496,53 @@
         }
 
         const chatWindow = document.getElementById('chat-window');
-        let lastSenderId = null; let currentGroup = null; let pendingFiles = []; let currentReply = null; 
+        let lastSenderId = null; let currentGroup = null; let pendingFiles = []; let currentReply = null;
+        let bottomPinToken = 0; let bottomPinContext = null; let bottomPinUntil = 0;
+
+        function cancelBottomPin() {
+            bottomPinToken++;
+            bottomPinContext = null;
+            bottomPinUntil = 0;
+        }
+
+        function pinChatToLatest(context = state.chatContext) {
+            const token = ++bottomPinToken;
+            bottomPinContext = context;
+            bottomPinUntil = performance.now() + 1400;
+            isUserAtBottom = true;
+
+            const pin = () => {
+                if (token !== bottomPinToken || bottomPinContext !== context || context !== state.chatContext || isMinimized) return;
+                chatWindow.scrollTop = chatWindow.scrollHeight;
+                isUserAtBottom = true;
+            };
+
+            pin();
+            requestAnimationFrame(() => { pin(); requestAnimationFrame(pin); });
+            [60, 180, 420, 900, 1350].forEach(delay => setTimeout(pin, delay));
+        }
+
+        function keepLatestVisibleAfterLayoutChange() {
+            const pinIsSettling = bottomPinContext === state.chatContext && performance.now() < bottomPinUntil;
+            if ((!pinIsSettling && !isUserAtBottom) || isMinimized) return;
+            requestAnimationFrame(() => {
+                const stillSettling = bottomPinContext === state.chatContext && performance.now() < bottomPinUntil;
+                if (stillSettling || isUserAtBottom) {
+                    chatWindow.scrollTop = chatWindow.scrollHeight;
+                    isUserAtBottom = true;
+                }
+            });
+        }
+
+        function watchMessageMediaLayout(element) {
+            if (!element) return;
+            element.addEventListener('load', keepLatestVisibleAfterLayoutChange, { once: true });
+            element.addEventListener('loadedmetadata', keepLatestVisibleAfterLayoutChange, { once: true });
+            element.addEventListener('error', keepLatestVisibleAfterLayoutChange, { once: true });
+            if ((element.tagName === 'IMG' && element.complete) || (element.tagName === 'VIDEO' && element.readyState >= 1)) {
+                keepLatestVisibleAfterLayoutChange();
+            }
+        }
 
         window.toggleMinMax = function(action) {
             const chatUi = document.getElementById('chat-ui');
@@ -438,7 +554,7 @@
                 chatUi.classList.remove('minimized'); 
                 if(isMaximized) { chatUi.classList.remove('maximized'); isMaximized = false; } else { chatUi.classList.add('maximized'); isMaximized = true; isMinimized = false; }
             } else { 
-                chatUi.classList.remove('minimized'); if(isMaximized) chatUi.classList.add('maximized'); isMinimized = false; clearUnreadState(); setTimeout(() => chatWindow.scrollTop = chatWindow.scrollHeight, 100);
+                chatUi.classList.remove('minimized'); if(isMaximized) chatUi.classList.add('maximized'); isMinimized = false; clearUnreadState(); setTimeout(() => pinChatToLatest(state.chatContext), 100);
             }
         };
 
@@ -509,10 +625,35 @@
         });
 
         chatWindow.addEventListener('wheel', (event) => {
+            if (event.deltaY !== 0) cancelBottomPin();
             if (event.deltaY < 0 && chatWindow.scrollTop <= 4) maybeLoadOlderMessages();
         }, { passive: true });
+        chatWindow.addEventListener('pointerdown', cancelBottomPin, { passive: true });
 
-        window.jumpToBottom = function() { chatWindow.scrollTop = chatWindow.scrollHeight; clearUnreadState(); };
+        window.jumpToBottom = function() { pinChatToLatest(state.chatContext); clearUnreadState(); };
+
+        const mobileViewportQuery = window.matchMedia('(max-width: 700px)');
+        function syncMobileViewportHeight() {
+            if (!mobileViewportQuery.matches) {
+                document.documentElement.style.removeProperty('--mobile-viewport-height');
+                return;
+            }
+            const viewportHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+            document.documentElement.style.setProperty('--mobile-viewport-height', `${Math.round(viewportHeight)}px`);
+        }
+        syncMobileViewportHeight();
+        window.addEventListener('resize', syncMobileViewportHeight, { passive: true });
+        if (mobileViewportQuery.addEventListener) mobileViewportQuery.addEventListener('change', syncMobileViewportHeight);
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', () => {
+                syncMobileViewportHeight();
+                if (mobileViewportQuery.matches && isUserAtBottom && !isMinimized) {
+                    requestAnimationFrame(() => {
+                        if (isUserAtBottom) chatWindow.scrollTop = chatWindow.scrollHeight;
+                    });
+                }
+            });
+        }
         function clearUnreadState() {
             unreadCount = 0; document.getElementById('new-msg-notification').style.display = 'none';
             if (dividerElement) { dividerElement.remove(); dividerElement = null; }
@@ -554,6 +695,8 @@
             currentReply = null;
             updateContextBar();
             lastSenderId = null; lastMessageTime = 0; currentGroup = null;
+            cancelBottomPin();
+            isUserAtBottom = true;
             clearUnreadState();
 
             if (conversation.loaded) {
@@ -893,6 +1036,7 @@
                     if(previewHTML) {
                         const pDiv = document.createElement('div');
                         pDiv.innerHTML = previewHTML;
+                        pDiv.querySelectorAll('img, iframe, video, audio').forEach(watchMessageMediaLayout);
                         bubble.appendChild(pDiv);
                     }
                 }
@@ -900,11 +1044,11 @@
                 if (data.files && data.files.length > 0) {
                     data.files.forEach(file => {
                         if (file.type && file.type.startsWith('image/')) {
-                            const img = document.createElement('img'); img.src = file.data; img.className = 'msg-img'; img.loading = 'lazy'; img.decoding = 'async'; bubble.appendChild(img);
+                            const img = document.createElement('img'); img.className = 'msg-img'; img.loading = 'lazy'; img.decoding = 'async'; watchMessageMediaLayout(img); img.src = file.data; bubble.appendChild(img);
                         } else if (file.type && file.type.startsWith('video/')) {
-                            const vid = document.createElement('video'); vid.src = file.data; vid.className = 'msg-video'; vid.controls = true; vid.preload = 'metadata'; bubble.appendChild(vid);
+                            const vid = document.createElement('video'); vid.className = 'msg-video'; vid.controls = true; vid.preload = 'metadata'; watchMessageMediaLayout(vid); vid.src = file.data; bubble.appendChild(vid);
                         } else if (file.type && file.type.startsWith('audio/')) {
-                            const aud = document.createElement('audio'); aud.src = file.data; aud.className = 'msg-audio'; aud.controls = true; aud.preload = 'metadata'; bubble.appendChild(aud);
+                            const aud = document.createElement('audio'); aud.className = 'msg-audio'; aud.controls = true; aud.preload = 'metadata'; watchMessageMediaLayout(aud); aud.src = file.data; bubble.appendChild(aud);
                         } else {
                             const fileDiv = document.createElement('div');
                             fileDiv.className = 'msg-file-icon';
@@ -956,8 +1100,8 @@
             });
             updateDMList();
             requestAnimationFrame(() => {
-                if (scrollBottom) chatWindow.scrollTop = chatWindow.scrollHeight;
-                isUserAtBottom = scrollBottom || chatWindow.scrollTop + chatWindow.clientHeight >= chatWindow.scrollHeight - 50;
+                if (scrollBottom) pinChatToLatest(state.chatContext);
+                else isUserAtBottom = chatWindow.scrollTop + chatWindow.clientHeight >= chatWindow.scrollHeight - 50;
                 ensureScrollableHistory();
             });
         }
