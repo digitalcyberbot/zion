@@ -77,9 +77,9 @@
         .pinned-text { color: #ddd; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .dm-item { background: rgba(255,255,255,0.05); border-radius: 12px; padding: 12px; margin-bottom: 8px; font-size: 0.9rem; cursor: pointer; display: flex; align-items: center;}
         .dm-item:hover { background: rgba(255,255,255,0.1); }
-        .dm-item-pfp { width: 30px; height: 30px; border-radius: 50%; margin-right: 10px; background: transparent; object-fit: cover;}
+        .dm-item-pfp { width: 30px; height: 30px; border-radius: 50%; margin-right: 10px; background: #333; object-fit: cover;}
         #dm-banner { background: rgba(0,0,0,0.6); padding: 8px; text-align: center; font-weight: bold; font-size: 0.9rem; cursor: pointer; display: none; border-bottom: 1px solid rgba(255,255,255,0.1); }
-        #chat-window { flex: 1; overflow-y: auto; display: flex; flex-direction: column; padding: 15px; gap: 4px; scrollbar-width: none; position: relative;}
+        #chat-window { flex: 1; overflow-y: auto; display: flex; flex-direction: column; padding: 15px; gap: 4px; scrollbar-width: none; position: relative; overflow-anchor: auto;}
         #new-msg-notification { position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); background: var(--user-color); color: white; padding: 8px 16px; border-radius: 20px; font-size: 0.85rem; font-weight: bold; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.5); z-index: 15; display: none; animation: bounceUp 0.3s ease-out; border: 1px solid rgba(255,255,255,0.2); }
         @keyframes bounceUp { from { transform: translateX(-50%) translateY(20px); opacity: 0; } to { transform: translateX(-50%) translateY(0); opacity: 1; } }
         .new-msg-divider { display: flex; align-items: center; justify-content: center; margin: 15px 0; color: var(--user-color); font-size: 0.7rem; font-weight: bold; position: relative; text-transform: uppercase; letter-spacing: 1px; }
@@ -87,14 +87,14 @@
         .msg-group { display: flex; gap: 10px; margin-bottom: 12px; max-width: 90%; }
         .msg-group.other { align-self: flex-start; flex-direction: row; }
         .msg-group.user { align-self: flex-end; flex-direction: row; justify-content: flex-end; }
-        .msg-content-wrapper { display: flex; flex-direction: column; max-width: 100%; }
+        .msg-content-wrapper { display: flex; flex-direction: column; max-width: 100%; min-width: 0; }
         .msg-group.user .msg-content-wrapper { align-items: flex-end; }
         .msg-group.other .msg-content-wrapper { align-items: flex-start; }
-        .msg-pfp { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; background: transparent; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.2); align-self: flex-end; cursor: pointer; z-index: 5;}
+        .msg-pfp { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; background: #333; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.2); align-self: flex-start; margin-top: 18px; cursor: pointer; z-index: 5;}
         .bubbles-container { display: flex; flex-direction: column; gap: 2px; width: 100%; }
         .msg-group.user .bubbles-container { align-items: flex-end; }
         .msg-group.other .bubbles-container { align-items: flex-start; }
-        .message-bubble { padding: 9px 14px; font-size: 0.95rem; line-height: 1.4; color: #fff; word-wrap: break-word; cursor: pointer; transition: background 0.3s; }
+        .message-bubble { padding: 9px 14px; font-size: 0.95rem; line-height: 1.4; color: #fff; overflow-wrap: anywhere; word-break: break-word; cursor: pointer; transition: background 0.3s; max-width: 100%; box-sizing: border-box; }
         .message-bubble.highlight { animation: flash 1s ease; }
         @keyframes flash { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(2); } }
         .msg-group.user .message-bubble { background: var(--user-color); border-radius: 20px 4px 4px 20px; }
@@ -280,12 +280,61 @@
         function getDisplayPfp(userOrColor) {
             let color = '#333';
             if (userOrColor && typeof userOrColor === 'object') {
-                if (userOrColor.pfp && userOrColor.pfp.length > 100) return userOrColor.pfp; 
-                color = userOrColor.color || '#333'; 
+                const pfp = typeof userOrColor.pfp === 'string' ? userOrColor.pfp.trim() : '';
+                if (/^(data:image\/|https?:\/\/|blob:|\/)/i.test(pfp)) return pfp;
+                color = userOrColor.color || '#333';
             } else if (typeof userOrColor === 'string') { color = userOrColor; }
-            if (!/^#[0-9A-F]{6}$/i.test(color)) color = '#007AFF'; 
-            const c = color.replace('#', '%23');
-            return `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='${c}'/></svg>`;
+            if (!/^#[0-9A-F]{6}$/i.test(color)) color = '#007AFF';
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="${color}"/></svg>`;
+            return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+        }
+
+        function findActiveUser(username) {
+            if (!username) return null;
+            return Object.values(state.users || {}).find(user => user && user.username === username) || null;
+        }
+
+        function setSafeAvatar(img, username, snapshot = {}) {
+            if (!img) return;
+            const liveUser = findActiveUser(username);
+            const sourceUser = liveUser || {
+                pfp: snapshot.userPfp || snapshot.pfp || '',
+                color: snapshot.userColor || snapshot.color || '#666'
+            };
+            const fallbackColor = sourceUser.color || snapshot.userColor || snapshot.color || '#666';
+            const source = getDisplayPfp(sourceUser);
+            const fallback = getDisplayPfp(fallbackColor);
+            const avatarKey = `${source.length}:${source.slice(0, 36)}:${source.slice(-20)}`;
+            if (img.dataset.avatarKey === avatarKey) return;
+            img.dataset.avatarKey = avatarKey;
+            if (username) img.dataset.username = username;
+            img.decoding = 'async';
+            img.onerror = () => {
+                img.onerror = null;
+                img.dataset.avatarKey = '';
+                img.src = fallback;
+            };
+            img.src = source || fallback;
+        }
+
+        function refreshVisibleAvatars() {
+            document.querySelectorAll('.msg-pfp[data-username]').forEach(img => {
+                const liveUser = findActiveUser(img.dataset.username);
+                if (liveUser) setSafeAvatar(img, img.dataset.username, liveUser);
+            });
+        }
+
+        function setBackgroundAvatar(element, userOrColor) {
+            if (!element) return;
+            const source = getDisplayPfp(userOrColor);
+            element.style.backgroundImage = `url(${JSON.stringify(source)})`;
+            const fallbackColor = userOrColor && typeof userOrColor === 'object' ? userOrColor.color : userOrColor;
+            const probe = new Image();
+            probe.onerror = () => {
+                const fallback = getDisplayPfp(fallbackColor || '#666');
+                element.style.backgroundImage = `url(${JSON.stringify(fallback)})`;
+            };
+            probe.src = source;
         }
         function hexToRgba(hex, alpha) {
             let r = 0, g = 0, b = 0;
@@ -316,9 +365,37 @@
         }
 
         const state = { currentUser: null, users: {}, history: [], chatContext: 'public', dmContacts: new Set(), unread: {}, pinned: [] };
+        const conversationState = new Map();
         let isUserAtBottom = true; let unreadCount = 0; let dividerElement = null; let isMinimized = false; let isMaximized = false; let pfpPendingReset = false;
-        let isLoadingHistory = false;
+        let historyRequestSeq = 0;
         let lastMessageTime = 0;
+
+        function getConversation(context = state.chatContext) {
+            const key = (typeof context === 'string' && context) ? context : 'public';
+            if (!conversationState.has(key)) {
+                conversationState.set(key, { messages: [], loaded: false, loading: false, hasMore: true, requestId: null });
+            }
+            return conversationState.get(key);
+        }
+
+        function syncActiveHistory() {
+            state.history = getConversation(state.chatContext).messages;
+            return state.history;
+        }
+
+        function contextForMessage(data, myName = state.currentUser && state.currentUser.username) {
+            if (!data || !data.toUser) return 'public';
+            if (!myName) return null;
+            if (data.user === myName) return data.toUser || null;
+            if (data.toUser === myName) return data.user || null;
+            return null;
+        }
+
+        function allCachedMessages() {
+            const result = [];
+            conversationState.forEach(conversation => result.push(...conversation.messages));
+            return result;
+        }
 
         function getDynamicTime(dateInput) {
             if(!dateInput) return '';
@@ -391,20 +468,49 @@
             });
         });
 
+        function requestMoreHistory(context = state.chatContext) {
+            const conversation = getConversation(context);
+            if (conversation.loading || !conversation.hasMore) return false;
+            const oldestMsg = conversation.messages[0] || null;
+            conversation.loading = true;
+            const requestId = ++historyRequestSeq;
+            conversation.requestId = requestId;
+            socket.emit('loadMoreMessages', {
+                context,
+                lastTimestamp: oldestMsg ? oldestMsg.timestamp : null,
+                lastMessageId: oldestMsg ? messageIdOf(oldestMsg) : null,
+                requestId
+            });
+            return true;
+        }
+
+        function maybeLoadOlderMessages() {
+            const conversation = getConversation();
+            if (!conversation.loaded || conversation.loading || !conversation.hasMore || conversation.messages.length === 0) return;
+            if (chatWindow.scrollTop <= 80 || chatWindow.scrollHeight <= chatWindow.clientHeight + 8) {
+                requestMoreHistory(state.chatContext);
+            }
+        }
+
+        function ensureScrollableHistory() {
+            requestAnimationFrame(() => {
+                const conversation = getConversation();
+                if (conversation.loaded && conversation.hasMore && !conversation.loading && chatWindow.scrollHeight <= chatWindow.clientHeight + 8) {
+                    requestMoreHistory(state.chatContext);
+                }
+            });
+        }
+
         chatWindow.addEventListener('scroll', () => {
             const position = chatWindow.scrollTop + chatWindow.clientHeight;
             isUserAtBottom = position >= chatWindow.scrollHeight - 50;
             if (isUserAtBottom && unreadCount > 0 && !isMinimized) clearUnreadState();
-            
-            if (chatWindow.scrollTop === 0 && !isLoadingHistory && state.history.length > 0) {
-                isLoadingHistory = true;
-                const oldestMsg = state.history[0];
-                socket.emit('loadMoreMessages', { 
-                    context: state.chatContext, 
-                    lastTimestamp: oldestMsg.timestamp 
-                });
-            }
+            maybeLoadOlderMessages();
         });
+
+        chatWindow.addEventListener('wheel', (event) => {
+            if (event.deltaY < 0 && chatWindow.scrollTop <= 4) maybeLoadOlderMessages();
+        }, { passive: true });
 
         window.jumpToBottom = function() { chatWindow.scrollTop = chatWindow.scrollHeight; clearUnreadState(); };
         function clearUnreadState() {
@@ -441,55 +547,62 @@
             bar.style.display = (currentReply || pendingFiles.length > 0) ? 'flex' : 'none';
         }
 
+        function showConversation(context, { scrollBottom = true } = {}) {
+            state.chatContext = context;
+            const conversation = getConversation(context);
+            syncActiveHistory();
+            currentReply = null;
+            updateContextBar();
+            lastSenderId = null; lastMessageTime = 0; currentGroup = null;
+            clearUnreadState();
+
+            if (conversation.loaded) {
+                renderHistory(conversation.messages, state.currentUser ? state.currentUser.username : '', { scrollBottom });
+                ensureScrollableHistory();
+            } else {
+                chatWindow.innerHTML = '';
+                requestMoreHistory(context);
+            }
+            renderPinList();
+        }
+
         window.switchToPublicChat = function() {
-            state.chatContext = 'public';
+            stopTyping();
+            clearTypingUi();
             document.getElementById('dm-banner').style.display = 'none';
             document.getElementById('msg-input').placeholder = "Message public chat...";
             const ui = document.getElementById('chat-ui');
             ui.style.background = 'var(--glass-bg)';
             ui.style.borderColor = 'var(--border-color)';
-            filterChatWindow(); renderPinList();
-            
-            chatWindow.innerHTML = ''; 
-            state.history = [];
-            isLoadingHistory = false;
-            lastSenderId = null; lastMessageTime = 0; currentGroup = null;
-            socket.emit('loadMoreMessages', { context: 'public' });
+            showConversation('public');
         };
 
         window.switchToDMChat = function(targetUsername) {
-            state.chatContext = targetUsername;
+            if (!targetUsername || !state.currentUser || targetUsername === state.currentUser.username) return;
+            stopTyping();
+            clearTypingUi();
             if (state.unread[targetUsername]) { delete state.unread[targetUsername]; updateUnreadBadges(); }
             document.getElementById('dm-banner').style.display = 'block';
             document.getElementById('dm-banner').innerText = `Private with ${targetUsername}. Click to return to public chat.`;
             document.getElementById('msg-input').placeholder = `Message ${targetUsername}...`;
             const targetUser = Object.values(state.users).find(u => u.username === targetUsername);
+            const ui = document.getElementById('chat-ui');
             if(targetUser) {
-                const bg = hexToRgba(targetUser.color, 0.15); 
-                const ui = document.getElementById('chat-ui');
+                const bg = hexToRgba(targetUser.color, 0.15);
                 ui.style.background = `linear-gradient(to bottom, ${bg}, rgba(0,0,0,0.85))`;
                 ui.style.borderColor = targetUser.color;
+            } else {
+                ui.style.background = 'var(--glass-bg)';
+                ui.style.borderColor = 'var(--border-color)';
             }
-            filterChatWindow(); renderPinList();
-            
-            chatWindow.innerHTML = '';
-            state.history = [];
-            isLoadingHistory = false;
-            lastSenderId = null; lastMessageTime = 0; currentGroup = null;
-            socket.emit('loadMoreMessages', { context: targetUsername });
+            state.dmContacts.add(targetUsername);
+            showConversation(targetUsername);
         };
 
         window.startPrivateChat = function() {
             const targetUser = document.getElementById('p-username').innerText;
             if(targetUser && targetUser !== state.currentUser.username) { switchToDMChat(targetUser); closeProfile(); document.getElementById('dm-panel').classList.remove('open'); }
         };
-
-        function filterChatWindow() {
-            const groups = chatWindow.querySelectorAll('.msg-group');
-            groups.forEach(group => { group.remove(); });
-            const bots = chatWindow.querySelectorAll('.message.bot');
-            bots.forEach(b => { b.remove(); });
-        }
 
         function updateUnreadBadges() {
             let total = 0; for(let u in state.unread) total += state.unread[u];
@@ -503,9 +616,12 @@
             state.dmContacts.forEach(contactName => {
                 let u = Object.values(state.users).find(user => user.username === contactName);
                 if (!u) {
-                    const msg = state.history.find(m => m.user === contactName || m.toUser === contactName);
-                    const c = msg && msg.userColor ? msg.userColor : '#666';
-                    u = { pfp: msg && msg.user === contactName ? msg.userPfp : '', color: c };
+                    const cached = allCachedMessages();
+                    const msg = cached.slice().reverse().find(m => m.user === contactName);
+                    u = {
+                        pfp: msg ? (msg.userPfp || '') : '',
+                        color: msg ? (msg.userColor || '#666') : '#666'
+                    };
                 }
 
                 const item = document.createElement('div');
@@ -513,8 +629,7 @@
 
                 const img = document.createElement('img');
                 img.className = 'dm-item-pfp';
-                img.src = getDisplayPfp(u);
-                img.onerror = () => { img.src = getDisplayPfp(u.color); };
+                setSafeAvatar(img, contactName, u);
 
                 const name = document.createElement('span');
                 name.innerText = contactName;
@@ -613,134 +728,238 @@
             return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="link-card"><div class="link-icon">🔗</div><div class="link-info"><div class="link-title">${safeDomain}</div><div class="link-url">${safeUrl}</div></div></a>`;
         }
 
-        function addMessageToUI(data, isSelf, prepend = false) {
-            if (document.getElementById(data.msgId) || document.getElementById(data._id)) return; 
-            const msgId = data.msgId || data._id;
+        function messageIdOf(data) {
+            const value = data && (data.msgId || data._id);
+            return value == null ? '' : String(value);
+        }
+
+        function messageMatchesCurrentContext(data, isSelf) {
+            const isDM = !!data.toUser;
+            if (state.chatContext === 'public') return !isDM;
+            if (!isDM) return false;
+            const partner = isSelf ? data.toUser : data.user;
+            return partner === state.chatContext;
+        }
+
+        function captureScrollAnchor() {
+            const viewportTop = chatWindow.getBoundingClientRect().top;
+            const candidates = Array.from(chatWindow.querySelectorAll('.message-bubble, .message.bot'));
+            const element = candidates.find(el => el.getBoundingClientRect().bottom >= viewportTop);
+            if (!element || !element.id) return null;
+            return { id: element.id, top: element.getBoundingClientRect().top };
+        }
+
+        function restoreScrollAnchor(anchor) {
+            if (!anchor) return;
+            const element = document.getElementById(anchor.id);
+            if (!element) return;
+            const delta = element.getBoundingClientRect().top - anchor.top;
+            if (Math.abs(delta) > 0.5) chatWindow.scrollTop += delta;
+        }
+
+        function groupCanStack(group, data, isDM, dmPartner, isSelf, validTimestamp, prepend) {
+            if (!group || !group.classList.contains('msg-group')) return false;
+            if (group.dataset.sender !== data.user) return false;
+            if ((group.dataset.isDm === 'true') !== isDM) return false;
+            if ((group.dataset.dmPartner || '') !== (dmPartner || '')) return false;
+            if (group.classList.contains('user') !== isSelf) return false;
+            const boundaryTs = Number(prepend ? group.dataset.firstTs : group.dataset.lastTs);
+            if (!Number.isFinite(boundaryTs)) return false;
+            const diff = prepend ? boundaryTs - validTimestamp : validTimestamp - boundaryTs;
+            return diff >= 0 && diff < 300000;
+        }
+
+        function addMessageToUI(data, isSelf, options = {}) {
+            const prepend = options.prepend === true;
+            const isLiveEvent = options.isLive === true;
+            const msgId = messageIdOf(data);
+            if (!msgId || document.getElementById(msgId)) return;
             const isDM = !!data.toUser;
             const dmPartner = isDM ? (isSelf ? data.toUser : data.user) : null;
-            const isLive = !!state.currentUser; const isNew = isLive && !isSelf;
+            const isNew = isLiveEvent && !!state.currentUser && !isSelf;
             const isSearching = document.getElementById('search-input').value.trim() !== '';
-            
-            // Ensure valid timestamp
-            const validTimestamp = data.timestamp ? new Date(data.timestamp).getTime() : Date.now();
+            const parsedTimestamp = data.timestamp ? new Date(data.timestamp).getTime() : Date.now();
+            const validTimestamp = Number.isFinite(parsedTimestamp) ? parsedTimestamp : Date.now();
 
-            if(isDM && dmPartner) { 
-                state.dmContacts.add(dmPartner); 
-                if (isNew && state.chatContext !== dmPartner) { state.unread[dmPartner] = (state.unread[dmPartner] || 0) + 1; updateUnreadBadges(); }
-                updateDMList(); 
+            if(isDM && dmPartner) {
+                state.dmContacts.add(dmPartner);
+                if (isNew && state.chatContext !== dmPartner) {
+                    state.unread[dmPartner] = (state.unread[dmPartner] || 0) + 1;
+                    updateUnreadBadges();
+                }
+                updateDMList();
             }
 
-            if (state.chatContext === 'public' && isDM) return;
-            if (state.chatContext !== 'public' && (!isDM || dmPartner !== state.chatContext)) return;
+            if (!messageMatchesCurrentContext(data, isSelf)) return;
 
             if (isNew && (isMinimized || !isUserAtBottom) && !isSearching) {
-                if (unreadCount === 0) { dividerElement = document.createElement('div'); dividerElement.className = 'new-msg-divider'; dividerElement.innerHTML = `<span>New Messages</span>`; chatWindow.appendChild(dividerElement); }
+                if (unreadCount === 0) {
+                    dividerElement = document.createElement('div');
+                    dividerElement.className = 'new-msg-divider';
+                    const label = document.createElement('span');
+                    label.innerText = 'New Messages';
+                    dividerElement.appendChild(label);
+                    chatWindow.appendChild(dividerElement);
+                }
                 unreadCount++;
-                if(!isMinimized) { document.getElementById('new-msg-notification').style.display = 'block'; document.getElementById('new-msg-notification').innerText = `↓ ${unreadCount} New Message${unreadCount > 1 ? 's' : ''}`; }
-                else { document.getElementById('minimized-text').innerText = `${unreadCount} New Message${unreadCount > 1 ? 's' : ''}`; }
+                if(!isMinimized) {
+                    document.getElementById('new-msg-notification').style.display = 'block';
+                    document.getElementById('new-msg-notification').innerText = `↓ ${unreadCount} New Message${unreadCount > 1 ? 's' : ''}`;
+                } else {
+                    document.getElementById('minimized-text').innerText = `${unreadCount} New Message${unreadCount > 1 ? 's' : ''}`;
+                }
             }
 
             if(data.type === 'bot') {
-                const div = document.createElement('div'); div.className = 'message bot'; div.id = msgId; div.innerText = data.text;
+                const div = document.createElement('div');
+                div.className = 'message bot';
+                div.id = msgId;
+                div.innerText = data.text || '';
                 if(prepend) chatWindow.prepend(div); else chatWindow.appendChild(div);
                 if(!prepend) { lastSenderId = 'system'; lastMessageTime = 0; currentGroup = null; }
             } else {
                 let groupToStack = null;
-                const prevWasDM = currentGroup ? currentGroup.dataset.isDm === 'true' : false;
-                const timeDiff = validTimestamp - lastMessageTime;
-                
-                // Stack if same user AND less than 5 mins (300000ms) difference
-                const canStack = (data.user === lastSenderId) && (timeDiff < 300000) && (isDM === prevWasDM) && currentGroup;
-
-                // Keep prepended history in separate groups so chronological order is preserved.
-                if (!prepend && canStack) groupToStack = currentGroup;
+                if (prepend) {
+                    const firstChild = chatWindow.firstElementChild;
+                    if (groupCanStack(firstChild, data, isDM, dmPartner, isSelf, validTimestamp, true)) groupToStack = firstChild;
+                } else if (groupCanStack(currentGroup, data, isDM, dmPartner, isSelf, validTimestamp, false)) {
+                    groupToStack = currentGroup;
+                }
 
                 if (!groupToStack) {
-                    groupToStack = document.createElement('div'); 
+                    groupToStack = document.createElement('div');
                     groupToStack.className = `msg-group ${isSelf ? 'user' : 'other'}`;
-                    groupToStack.dataset.isDm = isDM;
-                    groupToStack.dataset.sender = data.user;
+                    groupToStack.dataset.isDm = String(isDM);
+                    groupToStack.dataset.sender = data.user || '';
+                    groupToStack.dataset.firstTs = String(validTimestamp);
+                    groupToStack.dataset.lastTs = String(validTimestamp);
                     if(dmPartner) groupToStack.dataset.dmPartner = dmPartner;
-                    
+
                     if (!isSelf) {
-                        let pfpObj = { pfp: data.userPfp || '', color: data.userColor || '#666' };
-                        const pfpImg = document.createElement('img'); pfpImg.className = 'msg-pfp'; pfpImg.src = getDisplayPfp(pfpObj);
-                        pfpImg.onerror = () => { pfpImg.src = getDisplayPfp(pfpObj.color); };
+                        const pfpImg = document.createElement('img');
+                        pfpImg.className = 'msg-pfp';
+                        setSafeAvatar(pfpImg, data.user, data);
                         pfpImg.onclick = () => openProfileByUsername(data.user);
                         groupToStack.appendChild(pfpImg);
                     }
-                    const contentWrapper = document.createElement('div'); contentWrapper.className = 'msg-content-wrapper'; groupToStack.appendChild(contentWrapper);
-                    if (!isSelf) { const nameDiv = document.createElement('div'); nameDiv.className = 'msg-sender-name'; nameDiv.innerText = data.user; nameDiv.onclick = () => openProfileByUsername(data.user); contentWrapper.appendChild(nameDiv); }
-                    const bubblesContainer = document.createElement('div'); bubblesContainer.className = 'bubbles-container'; contentWrapper.appendChild(bubblesContainer);
-                    const timeDiv = document.createElement('div'); timeDiv.className = 'msg-timestamp'; 
-                    // Set time for new group (date of first message)
-                    timeDiv.setAttribute('data-ts', validTimestamp); 
-                    timeDiv.innerText = getDynamicTime(validTimestamp); 
+                    const contentWrapper = document.createElement('div');
+                    contentWrapper.className = 'msg-content-wrapper';
+                    groupToStack.appendChild(contentWrapper);
+                    if (!isSelf) {
+                        const nameDiv = document.createElement('div');
+                        nameDiv.className = 'msg-sender-name';
+                        nameDiv.innerText = data.user || '';
+                        nameDiv.onclick = () => openProfileByUsername(data.user);
+                        contentWrapper.appendChild(nameDiv);
+                    }
+                    const bubblesContainer = document.createElement('div');
+                    bubblesContainer.className = 'bubbles-container';
+                    contentWrapper.appendChild(bubblesContainer);
+                    const timeDiv = document.createElement('div');
+                    timeDiv.className = 'msg-timestamp';
+                    timeDiv.setAttribute('data-ts', validTimestamp);
+                    timeDiv.innerText = getDynamicTime(validTimestamp);
                     contentWrapper.appendChild(timeDiv);
-                    
+
                     if(prepend) chatWindow.prepend(groupToStack); else chatWindow.appendChild(groupToStack);
-                    
-                    if(!prepend) { currentGroup = groupToStack; }
+                    if(!prepend) currentGroup = groupToStack;
                 }
-                
+
                 const bubblesContainer = groupToStack.querySelector('.bubbles-container');
-                const bubble = document.createElement('div'); bubble.className = 'message-bubble'; bubble.id = msgId; 
-                if (isSelf && state.currentUser) { const myColor = state.currentUser.color || '#007AFF'; bubble.style.background = `linear-gradient(180deg, ${myColor}, ${adjustBrightness(myColor, -30)})`; }
-                
+                const bubble = document.createElement('div');
+                bubble.className = 'message-bubble';
+                bubble.id = msgId;
+                bubble.dataset.ts = String(validTimestamp);
+                if (isSelf && state.currentUser) {
+                    const myColor = state.currentUser.color || '#007AFF';
+                    bubble.style.background = `linear-gradient(180deg, ${myColor}, ${adjustBrightness(myColor, -30)})`;
+                }
+
                 if(data.replyTo) {
-                    const r = document.createElement('div'); r.className = 'reply-preview';
-                    const replyUser = document.createElement('strong'); replyUser.innerText = data.replyTo.user || '';
+                    const r = document.createElement('div');
+                    r.className = 'reply-preview';
+                    const replyUser = document.createElement('strong');
+                    replyUser.innerText = data.replyTo.user || '';
                     r.append(replyUser, document.createTextNode(`: ${data.replyTo.text || '[Attachment]'}`));
                     r.onclick = (e) => { e.stopPropagation(); scrollToMessage(data.replyTo.msgId || data.replyTo._id); };
                     bubble.appendChild(r);
                 }
 
-                if(data.text) { 
-                    const t = document.createElement('div'); t.innerHTML = parseMessageText(data.text); bubble.appendChild(t); 
+                if(data.text) {
+                    const t = document.createElement('div');
+                    t.innerHTML = parseMessageText(data.text);
+                    bubble.appendChild(t);
                     const previewHTML = generateLinkPreview(data.text);
-                    if(previewHTML) { const pDiv = document.createElement('div'); pDiv.innerHTML = previewHTML; bubble.appendChild(pDiv); }
+                    if(previewHTML) {
+                        const pDiv = document.createElement('div');
+                        pDiv.innerHTML = previewHTML;
+                        bubble.appendChild(pDiv);
+                    }
                 }
 
                 if (data.files && data.files.length > 0) {
                     data.files.forEach(file => {
-                        if (file.type && file.type.startsWith('image/')) { const img = document.createElement('img'); img.src = file.data; img.className = 'msg-img'; bubble.appendChild(img); }
-                        else if (file.type && file.type.startsWith('video/')) { const vid = document.createElement('video'); vid.src = file.data; vid.className = 'msg-video'; vid.controls = true; bubble.appendChild(vid); }
-                        else if (file.type && file.type.startsWith('audio/')) { const aud = document.createElement('audio'); aud.src = file.data; aud.className = 'msg-audio'; aud.controls = true; bubble.appendChild(aud); }
-                        else { const iconChar = '📁'; const fileDiv = document.createElement('div'); fileDiv.className = 'msg-file-icon'; fileDiv.innerText = `${iconChar} ${file.name || 'Attachment'}`; fileDiv.style.cursor = 'pointer'; fileDiv.onclick = () => { const a = document.createElement('a'); a.href = file.data; a.download = file.name || 'attachment'; a.click(); }; bubble.appendChild(fileDiv); }
+                        if (file.type && file.type.startsWith('image/')) {
+                            const img = document.createElement('img'); img.src = file.data; img.className = 'msg-img'; img.loading = 'lazy'; img.decoding = 'async'; bubble.appendChild(img);
+                        } else if (file.type && file.type.startsWith('video/')) {
+                            const vid = document.createElement('video'); vid.src = file.data; vid.className = 'msg-video'; vid.controls = true; vid.preload = 'metadata'; bubble.appendChild(vid);
+                        } else if (file.type && file.type.startsWith('audio/')) {
+                            const aud = document.createElement('audio'); aud.src = file.data; aud.className = 'msg-audio'; aud.controls = true; aud.preload = 'metadata'; bubble.appendChild(aud);
+                        } else {
+                            const fileDiv = document.createElement('div');
+                            fileDiv.className = 'msg-file-icon';
+                            fileDiv.innerText = `📁 ${file.name || 'Attachment'}`;
+                            fileDiv.style.cursor = 'pointer';
+                            fileDiv.onclick = () => { const a = document.createElement('a'); a.href = file.data; a.download = file.name || 'attachment'; a.click(); };
+                            bubble.appendChild(fileDiv);
+                        }
                     });
                 }
 
                 bubble.addEventListener('contextmenu', (e) => { e.stopPropagation(); showContext(e, data); });
                 bubble.addEventListener('dblclick', (e) => { e.stopPropagation(); socket.emit('pinMessage', data); });
-                
-                if (prepend && groupToStack !== chatWindow.firstElementChild) {
+
+                if (prepend) {
                     bubblesContainer.prepend(bubble);
+                    groupToStack.dataset.firstTs = String(validTimestamp);
+                    const timeDiv = groupToStack.querySelector('.msg-timestamp');
+                    if (timeDiv) {
+                        timeDiv.setAttribute('data-ts', validTimestamp);
+                        timeDiv.innerText = getDynamicTime(validTimestamp);
+                    }
                 } else {
                     bubblesContainer.appendChild(bubble);
-                }
-                
-                if(!prepend) {
+                    groupToStack.dataset.lastTs = String(validTimestamp);
                     lastSenderId = data.user;
                     lastMessageTime = validTimestamp;
                 }
             }
-            
+
             if(document.getElementById('search-input').value.trim() !== '') {
-               const term = document.getElementById('search-input').value.trim().toLowerCase();
-               if(currentGroup) {
-                   const isVisible = currentGroup.innerText.toLowerCase().includes(term);
-                   currentGroup.style.display = isVisible ? 'flex' : 'none';
-               }
+                const term = document.getElementById('search-input').value.trim().toLowerCase();
+                const affectedGroup = prepend ? chatWindow.firstElementChild : currentGroup;
+                if(affectedGroup && affectedGroup.classList.contains('msg-group')) {
+                    affectedGroup.style.display = affectedGroup.innerText.toLowerCase().includes(term) ? 'flex' : 'none';
+                }
             }
             if (!prepend && (isUserAtBottom || isSelf) && !isMinimized) chatWindow.scrollTop = chatWindow.scrollHeight;
         }
 
-        function renderHistory(history, myName) {
+        function renderHistory(history, myName, { scrollBottom = true } = {}) {
             document.getElementById('loading-screen').classList.remove('active');
-            chatWindow.innerHTML = ''; lastSenderId = null; lastMessageTime = 0; currentGroup = null; state.unread = {};
-            history.forEach(msg => { const isSelf = (msg.user === myName); addMessageToUI(msg, isSelf); });
+            chatWindow.innerHTML = '';
+            lastSenderId = null; lastMessageTime = 0; currentGroup = null;
+            clearUnreadState();
+            (Array.isArray(history) ? history : []).forEach(msg => {
+                const isSelf = (msg.user === myName);
+                addMessageToUI(msg, isSelf, { isLive: false });
+            });
             updateDMList();
-            setTimeout(() => { chatWindow.scrollTop = chatWindow.scrollHeight; isUserAtBottom = true; }, 100);
+            requestAnimationFrame(() => {
+                if (scrollBottom) chatWindow.scrollTop = chatWindow.scrollHeight;
+                isUserAtBottom = scrollBottom || chatWindow.scrollTop + chatWindow.clientHeight >= chatWindow.scrollHeight - 50;
+                ensureScrollableHistory();
+            });
         }
 
         const loginBtn = document.getElementById('login-btn'); const loginUser = document.getElementById('login-user'); const loginPass = document.getElementById('login-pass'); 
@@ -766,11 +985,12 @@
 
         window.openProfile = function(userData) {
             if (!userData) return;
-            pName.innerText = userData.username; pStatus.innerText = userData.status || 'Online'; pLoc.innerText = `📍 ${userData.location || 'Unknown'}`; pBio.innerText = userData.bio || 'No bio written.'; pAvatar.src = getDisplayPfp(userData); pAvatar.onerror = () => { pAvatar.src = getDisplayPfp(userData.color); }; pMsgBtn.style.display = (userData.username === state.currentUser.username) ? 'none' : 'block'; pMsgBtn.style.backgroundColor = userData.color; card.style.borderColor = userData.color; card.style.boxShadow = `0 20px 50px ${userData.color}40`; card.style.backgroundImage = userData.bgImage ? `url(${userData.bgImage})` : 'none'; card.style.fontFamily = userData.font || 'inherit'; card.style.color = userData.textColor || 'white'; styleTag.innerHTML = userData.customCss ? `#profile-card { ${userData.customCss} }` : ''; pView.style.display = 'flex'; pEdit.style.display = 'none'; modal.style.display = 'flex'; card.classList.remove('closing');
+            pName.innerText = userData.username; pStatus.innerText = userData.status || 'Online'; pLoc.innerText = `📍 ${userData.location || 'Unknown'}`; pBio.innerText = userData.bio || 'No bio written.'; setSafeAvatar(pAvatar, userData.username, userData); pMsgBtn.style.display = (userData.username === state.currentUser.username) ? 'none' : 'block'; pMsgBtn.style.backgroundColor = userData.color; card.style.borderColor = userData.color; card.style.boxShadow = `0 20px 50px ${userData.color}40`; card.style.backgroundImage = userData.bgImage ? `url(${userData.bgImage})` : 'none'; card.style.fontFamily = userData.font || 'inherit'; card.style.color = userData.textColor || 'white'; styleTag.innerHTML = userData.customCss ? `#profile-card { ${userData.customCss} }` : ''; pView.style.display = 'flex'; pEdit.style.display = 'none'; modal.style.display = 'flex'; card.classList.remove('closing');
         };
 
         window.openProfileEditor = function() {
             if (!state.currentUser) return;
+            pfpPendingReset = false;
             pName.innerText = state.currentUser.username; document.getElementById('edit-status').value = state.currentUser.status || ''; document.getElementById('edit-location').value = state.currentUser.location || ''; document.getElementById('edit-bio').value = state.currentUser.bio || ''; document.getElementById('color-input').value = state.currentUser.color || '#007AFF'; document.getElementById('edit-bg').value = state.currentUser.bgImage || ''; document.getElementById('edit-font').value = state.currentUser.font || 'sans-serif'; document.getElementById('edit-text-color').value = state.currentUser.textColor || '#ffffff'; document.getElementById('edit-css').value = state.currentUser.customCss || ''; document.getElementById('edit-pfp-input').value = ''; card.style.backgroundImage = 'none'; card.style.fontFamily = 'inherit'; card.style.color = 'white'; styleTag.innerHTML = ''; pView.style.display = 'none'; pEdit.style.display = 'block'; modal.style.display = 'flex'; window.switchTab('basic');
         };
 
@@ -780,7 +1000,7 @@
             const updates = { status: document.getElementById('edit-status').value, location: document.getElementById('edit-location').value, bio: document.getElementById('edit-bio').value, color: document.getElementById('color-input').value, bgImage: document.getElementById('edit-bg').value, font: document.getElementById('edit-font').value, textColor: document.getElementById('edit-text-color').value, customCss: document.getElementById('edit-css').value };
             const pfpFile = document.getElementById('edit-pfp-input').files[0];
             if (pfpPendingReset) updates.pfp = ''; 
-            const finish = (final) => { state.currentUser = { ...state.currentUser, ...final }; const newPfp = getDisplayPfp(final); const hBtn = document.getElementById('header-pfp-btn'); hBtn.style.backgroundImage = `url(${newPfp})`; const img = new Image(); img.src = newPfp; img.onerror = () => { hBtn.style.backgroundImage = `url(${getDisplayPfp(final.color)})`; }; document.documentElement.style.setProperty('--user-color', final.color); socket.emit('updateProfile', final); pfpPendingReset = false; closeProfile(); };
+            const finish = (final) => { state.currentUser = { ...state.currentUser, ...final }; setBackgroundAvatar(document.getElementById('header-pfp-btn'), state.currentUser); document.documentElement.style.setProperty('--user-color', state.currentUser.color || '#007AFF'); socket.emit('updateProfile', final); pfpPendingReset = false; closeProfile(); };
             if (pfpFile) { const r = new FileReader(); r.onload = (e) => { updates.pfp = e.target.result; finish(updates); }; r.readAsDataURL(pfpFile); } else finish(updates);
         };
         modal.addEventListener('click', (e) => { if(e.target === modal) closeProfile(); });
@@ -795,39 +1015,121 @@
                     state.currentUser = data;
                 }
                 
-                document.getElementById('header-pfp-btn').style.backgroundImage = `url(${getDisplayPfp(state.currentUser)})`; 
+                setBackgroundAvatar(document.getElementById('header-pfp-btn'), state.currentUser); 
                 document.documentElement.style.setProperty('--user-color', state.currentUser.color); 
-                renderHistory(state.history, state.currentUser.username); 
+                syncActiveHistory();
+                document.getElementById('loading-screen').classList.remove('active');
                 document.getElementById('login-overlay').style.display = 'none'; 
                 document.getElementById('chat-ui').style.display = 'flex'; 
                 document.getElementById('top-controls').style.display = 'flex'; 
             });
 
             socket.on('loginError', (msg) => { document.getElementById('loading-screen').classList.remove('active'); const errDiv = document.getElementById('login-error'); errDiv.style.display = 'block'; errDiv.innerText = msg; localStorage.removeItem('zion_creds'); });
-            socket.on('history', (history) => { state.history = history; if(state.currentUser) renderHistory(state.history, state.currentUser.username); });
-            
-            socket.on('moreHistory', (messages) => {
-                isLoadingHistory = false;
-                if(messages.length === 0) return;
-                const oldHeight = chatWindow.scrollHeight;
-                state.history = [...messages, ...state.history];
-                for (let i = messages.length - 1; i >= 0; i--) {
-                    addMessageToUI(messages[i], messages[i].user === state.currentUser.username, true);
+            socket.on('history', (payload) => {
+                const response = Array.isArray(payload) ? { messages: payload } : (payload || {});
+                const history = Array.isArray(response.messages) ? response.messages : [];
+                const conversation = getConversation('public');
+                const liveMessages = conversation.messages.filter(existing =>
+                    !history.some(message => messageIdOf(message) === messageIdOf(existing))
+                );
+                conversation.messages = [...history, ...liveMessages];
+                conversation.loaded = true;
+                conversation.loading = false;
+                conversation.requestId = null;
+                conversation.hasMore = typeof response.hasMore === 'boolean' ? response.hasMore : history.length >= 20;
+                if (state.chatContext === 'public') {
+                    syncActiveHistory();
+                    if(state.currentUser) renderHistory(conversation.messages, state.currentUser.username);
                 }
-                chatWindow.scrollTop = chatWindow.scrollHeight - oldHeight;
             });
 
-            socket.on('contextHistory', ({ messages, targetId }) => {
-                state.history = messages;
-                chatWindow.innerHTML = '';
-                renderHistory(messages, state.currentUser.username);
+            socket.on('moreHistory', (payload) => {
+                const response = payload && !Array.isArray(payload)
+                    ? payload
+                    : { context: state.chatContext, messages: Array.isArray(payload) ? payload : [], requestId: null };
+                const context = (typeof response.context === 'string' && response.context) ? response.context : 'public';
+                const conversation = getConversation(context);
+                if (conversation.requestId !== response.requestId) return;
+
+                const wasInitialLoad = !conversation.loaded && conversation.messages.length === 0;
+                conversation.loading = false;
+                conversation.requestId = null;
+                conversation.loaded = true;
+                const messages = Array.isArray(response.messages) ? response.messages : [];
+                conversation.hasMore = typeof response.hasMore === 'boolean' ? response.hasMore : messages.length >= 20;
+
+                const knownIds = new Set(conversation.messages.map(messageIdOf));
+                const uniqueMessages = messages.filter(msg => {
+                    const id = messageIdOf(msg);
+                    return id && !knownIds.has(id);
+                });
+                if (uniqueMessages.length > 0) conversation.messages = [...uniqueMessages, ...conversation.messages];
+
+                if (context !== state.chatContext) return;
+                syncActiveHistory();
+
+                if (wasInitialLoad) {
+                    renderHistory(conversation.messages, state.currentUser.username);
+                    return;
+                }
+                if (uniqueMessages.length === 0) {
+                    ensureScrollableHistory();
+                    return;
+                }
+
+                const anchor = captureScrollAnchor();
+                for (let i = uniqueMessages.length - 1; i >= 0; i--) {
+                    const msg = uniqueMessages[i];
+                    addMessageToUI(msg, msg.user === state.currentUser.username, { prepend: true, isLive: false });
+                }
+                restoreScrollAnchor(anchor);
+                ensureScrollableHistory();
+            });
+
+            socket.on('contextHistory', ({ context = 'public', messages, targetId }) => {
+                const conversation = getConversation(context);
+                conversation.messages = Array.isArray(messages) ? messages : [];
+                conversation.loaded = true;
+                conversation.loading = false;
+                conversation.requestId = null;
+                conversation.hasMore = true;
+                if (context !== state.chatContext) return;
+                syncActiveHistory();
+                renderHistory(conversation.messages, state.currentUser.username, { scrollBottom: false });
                 setTimeout(() => { scrollToMessage(targetId); }, 150);
             });
 
-            socket.on('updateUsers', (users) => { state.users = users; updateUserSpheres(users); updateDMList(); });
-            socket.on('chatMessage', (data) => { const myName = state.currentUser ? state.currentUser.username : ''; addMessageToUI(data, data.user === myName); });
+            socket.on('updateUsers', (users) => {
+                state.users = users || {};
+                updateUserSpheres(state.users);
+                updateDMList();
+                refreshVisibleAvatars();
+            });
+            socket.on('chatMessage', (data) => {
+                const myName = state.currentUser ? state.currentUser.username : '';
+                const isSelf = data.user === myName;
+                const context = contextForMessage(data, myName);
+                if (!context) return;
+
+                const conversation = getConversation(context);
+                const id = messageIdOf(data);
+                if (id && !conversation.messages.some(msg => messageIdOf(msg) === id)) conversation.messages.push(data);
+                conversation.loaded = true;
+
+                if (context === state.chatContext) syncActiveHistory();
+                addMessageToUI(data, isSelf, { isLive: true });
+            });
             socket.on('updatePinned', (pinnedList) => { state.pinned = pinnedList; renderPinList(); });
-            const indicator = document.getElementById('typing-indicator'); socket.on('userTyping', (name) => { indicator.innerText = `${name} is typing...`; indicator.classList.add('active'); }); socket.on('userStoppedTyping', () => { indicator.classList.remove('active'); });
+            socket.on('userTyping', ({ name, context } = {}) => {
+                if (!name || (context && context !== state.chatContext)) return;
+                typingUsers.add(name);
+                updateTypingUi();
+            });
+            socket.on('userStoppedTyping', ({ name, context } = {}) => {
+                if (context && context !== state.chatContext) return;
+                if (name) typingUsers.delete(name);
+                updateTypingUi();
+            });
             socket.on('updateUserStatus', (status) => {});
         }
 
@@ -840,7 +1142,42 @@
         getUserLocation().then(coords => fetchWeatherData(coords.latitude, coords.longitude)).then(weather => updateSceneWeather(weather)).catch(err => { console.log("Using default weather (Location denied or error)", err); updateSceneWeather({ is_day: 1, weathercode: 0, temperature: 20 }); });
         function updateUserSpheres(users) { Object.keys(users).forEach(id => { const u = users[id]; let group = userMeshes[id]; if (!group) { group = new THREE.Group(); const mesh = new THREE.Mesh(new THREE.SphereGeometry(2, 32, 32), new THREE.MeshStandardMaterial({ color: u.color, emissive: u.color, emissiveIntensity: 0.5 })); mesh.userData.isInteractable = true; group.add(mesh); group.position.set(u.x, u.y, u.z); group.userData = { username: u.username }; scene.add(group); userMeshes[id] = group; } else { const mesh = group.children[0]; mesh.material.color.set(u.color); mesh.material.emissive.set(u.color); group.position.set(u.x, u.y, u.z); } }); Object.keys(userMeshes).forEach(id => { if (!users[id]) { scene.remove(userMeshes[id]); delete userMeshes[id]; } }); }
         function animate() { requestAnimationFrame(animate); camera.position.lerp(cameraTargetPos, 0.05); currentLookAt.lerp(cameraLookAtTarget, 0.05); camera.lookAt(currentLookAt); terrain.position.z = (Math.sin(Date.now() * 0.0001) * 10) - 10; Object.values(userMeshes).forEach((group, i) => { group.position.y += Math.sin(Date.now() * 0.002 + i) * 0.05; }); raycaster.setFromCamera(pointer, camera); const targets = []; scene.traverse(c => { if(c.userData.isInteractable) targets.push(c); }); const intersects = raycaster.intersectObjects(targets); if (intersects.length > 0) { const targetGroup = intersects[0].object.parent; tooltip.innerText = targetGroup.userData.username; tooltip.style.display = 'block'; document.body.style.cursor = 'pointer'; } else { tooltip.style.display = 'none'; document.body.style.cursor = 'default'; } renderer.render(scene, camera); cloudsGroup.rotation.y += 0.0002; } animate();
-        document.getElementById('chat-form').addEventListener('submit', (e) => { e.preventDefault(); const text = document.getElementById('msg-input').value.trim(); if((text || pendingFiles.length > 0) && socket) { const toUser = state.chatContext === 'public' ? null : state.chatContext; socket.emit('chatMessage', { text, toUser, files: pendingFiles, replyTo: currentReply }); document.getElementById('msg-input').value = ''; pendingFiles = []; currentReply = null; updateContextBar(); } });
+        const msgInput = document.getElementById('msg-input');
+        const typingIndicator = document.getElementById('typing-indicator');
+        const typingUsers = new Set();
+        let typingTimer = null;
+        let typingActive = false;
+        function updateTypingUi() {
+            const names = Array.from(typingUsers);
+            if (names.length === 0) {
+                typingIndicator.classList.remove('active');
+                typingIndicator.innerText = '';
+                return;
+            }
+            typingIndicator.innerText = names.length === 1 ? `${names[0]} is typing...` : `${names.slice(0, 2).join(', ')}${names.length > 2 ? ` +${names.length - 2}` : ''} are typing...`;
+            typingIndicator.classList.add('active');
+        }
+        function clearTypingUi() {
+            typingUsers.clear();
+            updateTypingUi();
+        }
+        function stopTyping() {
+            if (!typingActive) return;
+            typingActive = false;
+            socket.emit('stopTyping', { context: state.chatContext });
+        }
+        msgInput.addEventListener('input', () => {
+            if (!state.currentUser) return;
+            if (!typingActive) {
+                typingActive = true;
+                socket.emit('typing', { context: state.chatContext });
+            }
+            clearTimeout(typingTimer);
+            typingTimer = setTimeout(stopTyping, 1200);
+        });
+        msgInput.addEventListener('blur', stopTyping);
+
+        document.getElementById('chat-form').addEventListener('submit', (e) => { e.preventDefault(); const text = msgInput.value.trim(); if((text || pendingFiles.length > 0) && socket) { const toUser = state.chatContext === 'public' ? null : state.chatContext; socket.emit('chatMessage', { text, toUser, files: pendingFiles, replyTo: currentReply }); msgInput.value = ''; clearTimeout(typingTimer); stopTyping(); pendingFiles = []; currentReply = null; updateContextBar(); } });
         document.getElementById('upload-btn').addEventListener('click', () => { document.getElementById('file-input').click(); });
         document.getElementById('file-input').addEventListener('change', function() { const files = Array.from(this.files); if(files.length === 0) return; files.forEach(file => { const reader = new FileReader(); reader.onload = (e) => { pendingFiles.push({ name: file.name, type: file.type, data: e.target.result }); updateContextBar(); }; reader.readAsDataURL(file); }); this.value = ''; });
         window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });

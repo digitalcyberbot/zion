@@ -259,14 +259,17 @@ io.on('connection', (socket) => {
 
             if (isDbConnected) {
                 try {
-                    const history = await Message.find({ toUser: null }).sort({ timestamp: -1 }).limit(20).lean();
-                    socket.emit('history', await hydrateMessageProfiles(history.reverse()));
+                    const page = await Message.find({ toUser: null }).sort({ timestamp: -1, _id: -1 }).limit(21).lean();
+                    const hasMore = page.length > 20;
+                    const history = await hydrateMessageProfiles(page.slice(0, 20).reverse());
+                    socket.emit('history', { messages: history, hasMore });
                 } catch (e) {
                     console.error(e);
                 }
             } else {
-                const publicHistory = chatHistory.filter(m => !m.toUser).slice(-20);
-                socket.emit('history', await hydrateMessageProfiles(publicHistory));
+                const publicMessages = chatHistory.filter(m => !m.toUser);
+                const publicHistory = await hydrateMessageProfiles(publicMessages.slice(-20));
+                socket.emit('history', { messages: publicHistory, hasMore: publicMessages.length > 20 });
             }
 
             if (isNewAccount) {
@@ -294,29 +297,63 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('loadMoreMessages', async ({ context = 'public', lastTimestamp, requestId = null } = {}) => {
+    socket.on('loadMoreMessages', async ({ context = 'public', lastTimestamp, lastMessageId = null, requestId = null } = {}) => {
         const currentUser = activeUsers[socket.id];
         if (!currentUser) return;
 
         try {
-            let moreMessages;
+            let moreMessages = [];
+            let hasMore = false;
             if (isDbConnected) {
-                const query = getContextQuery(context, currentUser.username);
-                if (lastTimestamp) query.timestamp = { $lt: new Date(lastTimestamp) };
-                moreMessages = await Message.find(query).sort({ timestamp: -1 }).limit(20).lean();
-                moreMessages.reverse();
+                const contextQuery = getContextQuery(context, currentUser.username);
+                let query = contextQuery;
+                if (lastTimestamp) {
+                    const cutoff = new Date(lastTimestamp);
+                    if (isMongoId(lastMessageId)) {
+                        query = {
+                            $and: [
+                                contextQuery,
+                                {
+                                    $or: [
+                                        { timestamp: { $lt: cutoff } },
+                                        { timestamp: cutoff, _id: { $lt: new mongoose.Types.ObjectId(lastMessageId) } }
+                                    ]
+                                }
+                            ]
+                        };
+                    } else {
+                        query = { $and: [contextQuery, { timestamp: { $lt: cutoff } }] };
+                    }
+                }
+                const page = await Message.find(query).sort({ timestamp: -1, _id: -1 }).limit(21).lean();
+                hasMore = page.length > 20;
+                moreMessages = page.slice(0, 20).reverse();
             } else {
-                const cutoff = lastTimestamp ? new Date(lastTimestamp).getTime() : Infinity;
-                moreMessages = chatHistory
-                    .filter(message => messageMatchesContext(message, context, currentUser.username))
-                    .filter(message => new Date(message.timestamp).getTime() < cutoff)
-                    .slice(-20);
+                const contextMessages = chatHistory.filter(message =>
+                    messageMatchesContext(message, context, currentUser.username)
+                );
+                let olderMessages = contextMessages;
+                if (lastMessageId) {
+                    const cursorIndex = contextMessages.findIndex(message =>
+                        normalizeId(message.msgId || message._id) === normalizeId(lastMessageId)
+                    );
+                    if (cursorIndex >= 0) olderMessages = contextMessages.slice(0, cursorIndex);
+                    else if (lastTimestamp) {
+                        const cutoff = new Date(lastTimestamp).getTime();
+                        olderMessages = contextMessages.filter(message => new Date(message.timestamp).getTime() < cutoff);
+                    }
+                } else if (lastTimestamp) {
+                    const cutoff = new Date(lastTimestamp).getTime();
+                    olderMessages = contextMessages.filter(message => new Date(message.timestamp).getTime() < cutoff);
+                }
+                hasMore = olderMessages.length > 20;
+                moreMessages = olderMessages.slice(-20);
             }
             moreMessages = await hydrateMessageProfiles(moreMessages);
-            socket.emit('moreHistory', { context, messages: moreMessages, requestId });
+            socket.emit('moreHistory', { context, messages: moreMessages, hasMore, requestId });
         } catch (e) {
             console.error(e);
-            socket.emit('moreHistory', { context, messages: [], requestId });
+            socket.emit('moreHistory', { context, messages: [], hasMore: false, requestId });
         }
     });
 
