@@ -150,7 +150,8 @@
         #msg-input:focus { border-color: var(--user-color); }
         .icon-btn { background: none; border: none; color: var(--user-color); font-size: 1.3rem; cursor: pointer; padding: 0 4px; transition: color 0.3s; }
         .send-btn { background: var(--user-color); color: white; width: 30px; height: 30px; border-radius: 50%; font-size: 1rem; transition: background 0.3s; }
-        #context-menu { position: absolute; background: rgba(40,40,40,0.95); border: 1px solid var(--border-color); color: white; display: none; flex-direction: column; z-index: 1000; padding: 6px; border-radius: 12px; box-shadow: 0 10px 20px rgba(0,0,0,0.5); width: 140px; backdrop-filter: blur(10px); }
+        #context-menu { position: absolute; background: rgba(40,40,40,0.95); border: 1px solid var(--border-color); color: white; display: none; flex-direction: column; z-index: 1000; padding: 6px; border-radius: 12px; box-shadow: 0 10px 20px rgba(0,0,0,0.5); width: 140px; backdrop-filter: blur(10px); -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+        #context-menu * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
         .ctx-item { padding: 8px 12px; cursor: pointer; font-size: 0.85rem; border-radius: 6px; }
         .ctx-item:hover { background: var(--blue-bubble); }
         .ctx-cancel { display: none; }
@@ -245,7 +246,8 @@
                 width: auto; max-width: none; padding: 8px; border-radius: 16px;
                 animation: mobileActionSheetIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
             }
-            .ctx-item { padding: 14px 16px; font-size: 1rem; min-height: 20px; }
+            .ctx-item { padding: 14px 16px; font-size: 1rem; min-height: 20px; touch-action: manipulation; }
+            .message-bubble.long-press-active, .message-bubble.long-press-active * { -webkit-user-select: none !important; user-select: none !important; -webkit-touch-callout: none !important; }
             .ctx-cancel { display: block; margin-top: 4px; text-align: center; color: #bbb; background: rgba(255,255,255,0.06); }
             @keyframes mobileActionSheetIn {
                 from { opacity: 0; transform: translateY(18px) scale(0.98); }
@@ -340,7 +342,7 @@
                 <button class="header-icon-btn desktop-size-control" onclick="toggleMinMax('max')" title="Maximize">🟢</button>
             </div>
             <div class="header-center-group">
-                <input id="search-input" placeholder="Search messages" autocomplete="off" aria-label="Search messages">
+                <input id="search-input" placeholder="Search" autocomplete="off" aria-label="Search">
             </div>
             <div class="header-right-group">
                 <button class="header-icon-btn" id="dm-toggle" title="Direct Messages">✉️ <div id="dm-badge" class="notification-badge">0</div></button>
@@ -627,6 +629,70 @@
             minText.innerText = unreadCount > 0 ? `${unreadCount} New Messages` : "Messages";
         }
 
+        let chatResizeGuardUntil = 0;
+        let chatResizeGuardToken = 0;
+
+        function captureChatResizeScroll() {
+            const distanceFromBottom = Math.max(0, chatWindow.scrollHeight - chatWindow.scrollTop - chatWindow.clientHeight);
+            if (distanceFromBottom <= 60) return { mode: 'bottom' };
+
+            const viewport = chatWindow.getBoundingClientRect();
+            const candidates = Array.from(chatWindow.querySelectorAll('.message-bubble, .message.bot'));
+            const anchor = candidates.find(element => {
+                const rect = element.getBoundingClientRect();
+                return rect.bottom > viewport.top + 1 && rect.top < viewport.bottom - 1;
+            });
+            if (!anchor || !anchor.id) return { mode: 'offset', scrollTop: chatWindow.scrollTop };
+
+            return {
+                mode: 'anchor',
+                id: anchor.id,
+                offset: anchor.getBoundingClientRect().top - viewport.top
+            };
+        }
+
+        function restoreChatResizeScroll(snapshot) {
+            if (!snapshot) return;
+            if (snapshot.mode === 'bottom') {
+                chatWindow.scrollTop = chatWindow.scrollHeight;
+                isUserAtBottom = true;
+                return;
+            }
+            if (snapshot.mode === 'offset') {
+                chatWindow.scrollTop = Math.min(snapshot.scrollTop, Math.max(0, chatWindow.scrollHeight - chatWindow.clientHeight));
+                return;
+            }
+
+            const anchor = document.getElementById(snapshot.id);
+            if (!anchor) return;
+            const viewportTop = chatWindow.getBoundingClientRect().top;
+            const currentOffset = anchor.getBoundingClientRect().top - viewportTop;
+            const delta = currentOffset - snapshot.offset;
+            if (Math.abs(delta) > 0.5) chatWindow.scrollTop += delta;
+        }
+
+        function stabilizeChatScrollDuringResize(snapshot, duration = 460) {
+            const token = ++chatResizeGuardToken;
+            const startedAt = performance.now();
+            chatResizeGuardUntil = startedAt + duration + 80;
+            if (snapshot && snapshot.mode !== 'bottom') cancelBottomPin();
+
+            const keepAnchored = (now) => {
+                if (token !== chatResizeGuardToken) return;
+                restoreChatResizeScroll(snapshot);
+                if (now - startedAt < duration) {
+                    requestAnimationFrame(keepAnchored);
+                    return;
+                }
+                restoreChatResizeScroll(snapshot);
+                if (!snapshot || snapshot.mode !== 'bottom') {
+                    isUserAtBottom = chatWindow.scrollTop + chatWindow.clientHeight >= chatWindow.scrollHeight - 50;
+                }
+                ensureScrollableHistory();
+            };
+            requestAnimationFrame(keepAnchored);
+        }
+
         window.toggleMinMax = function(action) {
             const chatUi = document.getElementById('chat-ui');
             const minText = document.getElementById('minimized-text');
@@ -641,12 +707,14 @@
                     finishMobileMinimize(chatUi, minText);
                 }
             } else if (action === 'max') {
+                const scrollSnapshot = captureChatResizeScroll();
                 chatUi.classList.remove('minimized');
                 if(isMaximized) {
                     chatUi.classList.remove('maximized'); isMaximized = false;
                 } else {
                     chatUi.classList.add('maximized'); isMaximized = true; isMinimized = false;
                 }
+                stabilizeChatScrollDuringResize(scrollSnapshot);
             } else {
                 const wasMinimized = isMinimized;
                 chatUi.classList.remove('minimized', 'mobile-closing');
@@ -912,7 +980,7 @@
             const position = chatWindow.scrollTop + chatWindow.clientHeight;
             isUserAtBottom = position >= chatWindow.scrollHeight - 50;
             if (isUserAtBottom && unreadCount > 0 && !isMinimized) clearUnreadState();
-            maybeLoadOlderMessages();
+            if (performance.now() >= chatResizeGuardUntil) maybeLoadOlderMessages();
         });
 
         chatWindow.addEventListener('wheel', (event) => {
@@ -1234,6 +1302,7 @@
             const cancel = () => {
                 if (timer) clearTimeout(timer);
                 timer = null;
+                element.classList.remove('long-press-active');
             };
 
             element.addEventListener('pointerdown', (event) => {
@@ -1242,6 +1311,7 @@
                 startY = event.clientY;
                 suppressClick = false;
                 cancel();
+                element.classList.add('long-press-active');
                 timer = setTimeout(() => {
                     timer = null;
                     suppressClick = true;
