@@ -101,6 +101,33 @@ function visiblePinsFor(username) {
     return pinnedMessages.filter(message => canUserSeeMessage(message, username));
 }
 
+async function hydrateMessageProfiles(messages) {
+    if (!Array.isArray(messages) || messages.length === 0) return [];
+    const usernames = [...new Set(messages.map(message => message && message.user).filter(name => name && name !== 'System'))];
+    if (usernames.length === 0) return messages;
+
+    const profiles = new Map();
+    if (isDbConnected) {
+        const records = await User.find({ username: { $in: usernames } }).select('username pfp color').lean();
+        records.forEach(record => profiles.set(record.username, record));
+    } else {
+        usernames.forEach(username => {
+            const user = localUsers[username];
+            if (user) profiles.set(username, { username, pfp: user.pfp || '', color: user.color || '#007AFF' });
+        });
+    }
+
+    return messages.map(message => {
+        const profile = profiles.get(message.user);
+        if (!profile) return message;
+        return {
+            ...message,
+            userPfp: profile.pfp || '',
+            userColor: profile.color || message.userColor || '#007AFF'
+        };
+    });
+}
+
 function emitPinnedUpdates() {
     for (const [socketId, user] of Object.entries(activeUsers)) {
         io.to(socketId).emit('updatePinned', visiblePinsFor(user.username));
@@ -233,13 +260,13 @@ io.on('connection', (socket) => {
             if (isDbConnected) {
                 try {
                     const history = await Message.find({ toUser: null }).sort({ timestamp: -1 }).limit(20).lean();
-                    socket.emit('history', history.reverse());
+                    socket.emit('history', await hydrateMessageProfiles(history.reverse()));
                 } catch (e) {
                     console.error(e);
                 }
             } else {
                 const publicHistory = chatHistory.filter(m => !m.toUser).slice(-20);
-                socket.emit('history', publicHistory);
+                socket.emit('history', await hydrateMessageProfiles(publicHistory));
             }
 
             if (isNewAccount) {
@@ -267,7 +294,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('loadMoreMessages', async ({ context = 'public', lastTimestamp } = {}) => {
+    socket.on('loadMoreMessages', async ({ context = 'public', lastTimestamp, requestId = null } = {}) => {
         const currentUser = activeUsers[socket.id];
         if (!currentUser) return;
 
@@ -285,10 +312,11 @@ io.on('connection', (socket) => {
                     .filter(message => new Date(message.timestamp).getTime() < cutoff)
                     .slice(-20);
             }
-            socket.emit('moreHistory', moreMessages);
+            moreMessages = await hydrateMessageProfiles(moreMessages);
+            socket.emit('moreHistory', { context, messages: moreMessages, requestId });
         } catch (e) {
             console.error(e);
-            socket.emit('moreHistory', []);
+            socket.emit('moreHistory', { context, messages: [], requestId });
         }
     });
 
@@ -307,7 +335,8 @@ io.on('connection', (socket) => {
                 const after = await Message.find({ ...query, timestamp: { $gt: targetMsg.timestamp } })
                     .sort({ timestamp: 1 }).limit(10).lean();
                 socket.emit('contextHistory', {
-                    messages: [...before.reverse(), targetMsg, ...after],
+                    context,
+                    messages: await hydrateMessageProfiles([...before.reverse(), targetMsg, ...after]),
                     targetId: msgId
                 });
             } else {
@@ -321,7 +350,8 @@ io.on('connection', (socket) => {
                 const start = Math.max(0, targetIndex - 10);
                 const end = Math.min(contextMessages.length, targetIndex + 11);
                 socket.emit('contextHistory', {
-                    messages: contextMessages.slice(start, end),
+                    context,
+                    messages: await hydrateMessageProfiles(contextMessages.slice(start, end)),
                     targetId: msgId
                 });
             }
@@ -428,14 +458,22 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('typing', () => {
+    socket.on('typing', ({ context = 'public' } = {}) => {
         const user = activeUsers[socket.id];
-        if (user) socket.broadcast.emit('userTyping', user.username);
+        if (!user) return;
+        const safeContext = typeof context === 'string' && context ? context : 'public';
+        const payload = { name: user.username, context: safeContext };
+        if (safeContext === 'public') socket.broadcast.emit('userTyping', payload);
+        else socket.to(safeContext).emit('userTyping', payload);
     });
 
-    socket.on('stopTyping', () => {
+    socket.on('stopTyping', ({ context = 'public' } = {}) => {
         const user = activeUsers[socket.id];
-        if (user) socket.broadcast.emit('userStoppedTyping', user.username);
+        if (!user) return;
+        const safeContext = typeof context === 'string' && context ? context : 'public';
+        const payload = { name: user.username, context: safeContext };
+        if (safeContext === 'public') socket.broadcast.emit('userStoppedTyping', payload);
+        else socket.to(safeContext).emit('userStoppedTyping', payload);
     });
 
     socket.on('pinMessage', async (msgData = {}) => {
