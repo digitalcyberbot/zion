@@ -64,6 +64,15 @@
         .header-center-group { flex: 2; display: flex; justify-content: center; } 
         .header-right-group { display: flex; gap: 5px; flex: 1; justify-content: flex-end; } 
         #search-input { background: rgba(0,0,0,0.3); border: none; color: white; padding: 8px 15px; border-radius: 20px; font-size: 0.9rem; width: 100%; max-width: 250px; box-sizing: border-box; outline: none; text-align: center;}
+        #search-nav { display: none; align-items: center; gap: 3px; margin-left: 6px; flex-shrink: 0; }
+        #search-nav.active { display: flex; }
+        .search-nav-btn { width: 28px; height: 28px; border: none; border-radius: 50%; background: rgba(255,255,255,0.1); color: white; cursor: pointer; font-size: 0.85rem; line-height: 1; }
+        .search-nav-btn:disabled { opacity: 0.35; cursor: default; }
+        .search-close-btn { display: none; }
+        #search-count { min-width: 42px; text-align: center; color: #bbb; font-size: 0.72rem; white-space: nowrap; }
+        .message-bubble.search-match { outline: 1px solid rgba(255,255,255,0.4); outline-offset: -1px; }
+        .message-bubble.search-current { animation: searchPulse 1.2s ease; outline: 2px solid rgba(255,255,255,0.9); outline-offset: 2px; }
+        @keyframes searchPulse { 0% { transform: scale(0.98); } 45% { transform: scale(1.015); } 100% { transform: scale(1); } }
         .header-icon-btn { background: transparent; border: none; color: #ccc; cursor: pointer; padding: 8px; font-size: 1.2rem; position: relative; width: 30px; text-align: center; }
         .notification-badge { position: absolute; top: -2px; right: -2px; background: #ff3b30; color: white; border-radius: 50%; padding: 2px 5px; font-size: 0.7rem; font-weight: bold; min-width: 14px; text-align: center; display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.5); animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
         @keyframes popIn { from { transform: scale(0); } to { transform: scale(1); } }
@@ -137,6 +146,7 @@
         #context-menu { position: absolute; background: rgba(40,40,40,0.95); border: 1px solid var(--border-color); color: white; display: none; flex-direction: column; z-index: 1000; padding: 6px; border-radius: 12px; box-shadow: 0 10px 20px rgba(0,0,0,0.5); width: 140px; backdrop-filter: blur(10px); }
         .ctx-item { padding: 8px 12px; cursor: pointer; font-size: 0.85rem; border-radius: 6px; }
         .ctx-item:hover { background: var(--blue-bubble); }
+        .ctx-cancel { display: none; }
         #status-dot { position: fixed; top: 20px; left: 20px; width: 10px; height: 10px; background: red; border-radius: 50%; z-index: 200; box-shadow: 0 0 10px red; }
         #status-text { position: fixed; top: 18px; left: 40px; z-index: 200; font-size: 0.8rem; opacity: 0.7; font-weight: 500; color: white;}
         #tooltip { position: absolute; background: rgba(40, 40, 40, 0.85); backdrop-filter: blur(12px); color: white; padding: 6px 12px; border-radius: 8px; pointer-events: none; font-size: 0.85rem; font-weight: 500; display: none; z-index: 50; box-shadow: 0 4px 12px rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); }
@@ -166,6 +176,16 @@
                 position: fixed; inset: 0; width: 100%; height: 100vh; height: var(--mobile-viewport-height, 100dvh); left: 0; bottom: 0;
                 border-radius: 0; border-left: 0; border-right: 0; transition: none;
             }
+            .chat-container.mobile-opening { animation: mobileChatOpen 0.28s cubic-bezier(0.16, 1, 0.3, 1); }
+            .chat-container.mobile-closing { animation: mobileChatClose 0.2s ease-in forwards; pointer-events: none; }
+            @keyframes mobileChatOpen {
+                from { opacity: 0; transform: translateY(24px) scale(0.985); }
+                to { opacity: 1; transform: translateY(0) scale(1); }
+            }
+            @keyframes mobileChatClose {
+                from { opacity: 1; transform: translateY(0) scale(1); }
+                to { opacity: 0; transform: translateY(22px) scale(0.985); }
+            }
             .chat-container.minimized {
                 inset: auto auto max(10px, env(safe-area-inset-bottom)) 10px;
                 width: min(260px, calc(100vw - 20px)); height: 56px; border-radius: 18px; border: 1px solid var(--border-color);
@@ -180,7 +200,13 @@
             .header-left-group, .header-right-group { flex: 0 0 auto; gap: 2px; }
             .header-center-group { flex: 1 1 auto; min-width: 0; padding: 0 4px; }
             .header-icon-btn { width: 38px; height: 38px; padding: 6px; font-size: 1.1rem; touch-action: manipulation; }
-            #search-input { min-width: 0; max-width: none; padding: 8px 10px; font-size: 16px; }
+            #search-input { min-width: 0; max-width: none; width: auto; flex: 1 1 auto; padding: 8px 10px; font-size: 16px; }
+            #search-nav { margin-left: 2px; gap: 2px; }
+            .search-nav-btn { width: 34px; height: 34px; font-size: 0.95rem; touch-action: manipulation; }
+            .search-close-btn { display: inline-block; }
+            #search-count { min-width: 36px; font-size: 0.68rem; }
+            .chat-header.search-active .header-left-group, .chat-header.search-active .header-right-group { display: none; }
+            .chat-header.search-active .header-center-group { padding: 0 2px; }
 
             #dm-banner { padding: 10px 12px; font-size: 0.82rem; flex-shrink: 0; }
             #chat-window {
@@ -208,7 +234,20 @@
             .side-panel { height: 100%; }
             .panel-header { height: 52px; padding: 10px 14px; }
             .dm-item, .pinned-item { padding: 14px 12px; }
-            #context-menu { position: fixed; max-width: calc(100vw - 24px); }
+            #context-menu {
+                position: fixed; left: 12px !important; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); top: auto !important;
+                width: auto; max-width: none; padding: 8px; border-radius: 16px;
+                animation: mobileActionSheetIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+            }
+            .ctx-item { padding: 14px 16px; font-size: 1rem; min-height: 20px; }
+            .ctx-cancel { display: block; margin-top: 4px; text-align: center; color: #bbb; background: rgba(255,255,255,0.06); }
+            @keyframes mobileActionSheetIn {
+                from { opacity: 0; transform: translateY(18px) scale(0.98); }
+                to { opacity: 1; transform: translateY(0) scale(1); }
+            }
+        }
+        @media (max-width: 700px) and (prefers-reduced-motion: reduce) {
+            .chat-container.mobile-opening, .chat-container.mobile-closing, #context-menu { animation: none !important; }
         }
     </style>
 </head>
@@ -219,6 +258,7 @@
     <div id="context-menu">
         <div class="ctx-item" id="ctx-reply">Reply</div>
         <div class="ctx-item" id="ctx-pin">Pin Message</div>
+        <div class="ctx-item ctx-cancel" id="ctx-cancel">Cancel</div>
     </div>
     <div id="status-dot"></div><div id="status-text">DISCONNECTED</div>
     <div id="top-controls" style="display:none;">
@@ -295,6 +335,12 @@
             </div>
             <div class="header-center-group">
                 <input id="search-input" placeholder="Search" autocomplete="off">
+                <div id="search-nav" aria-live="polite">
+                    <span id="search-count">0/0</span>
+                    <button type="button" class="search-nav-btn" id="search-prev" title="Previous result" aria-label="Previous search result">↑</button>
+                    <button type="button" class="search-nav-btn" id="search-next" title="Next result" aria-label="Next search result">↓</button>
+                    <button type="button" class="search-nav-btn search-close-btn" id="search-close" title="Close search" aria-label="Close search">×</button>
+                </div>
             </div>
             <div class="header-right-group">
                 <button class="header-icon-btn mobile-only" onclick="openProfileEditor()" title="Profile">👤</button>
@@ -439,6 +485,15 @@
         let isUserAtBottom = true; let unreadCount = 0; let dividerElement = null; let isMinimized = false; let isMaximized = false; let pfpPendingReset = false;
         let historyRequestSeq = 0;
         let lastMessageTime = 0;
+        let searchRequestSeq = 0;
+        let searchJumpSeq = 0;
+        let searchTimer = null;
+        let searchResults = [];
+        let searchIndex = -1;
+        let searchTerm = '';
+        let searchContextActive = false;
+        let searchRestoreAnchor = null;
+        let searchRestoreWasBottom = true;
 
         function getConversation(context = state.chatContext) {
             const key = (typeof context === 'string' && context) ? context : 'public';
@@ -544,44 +599,191 @@
             }
         }
 
+        function finishMobileMinimize(chatUi, minText) {
+            chatUi.classList.remove('mobile-closing', 'maximized');
+            chatUi.classList.add('minimized');
+            isMinimized = true;
+            isMaximized = false;
+            minText.innerText = unreadCount > 0 ? `${unreadCount} New Messages` : "Messages";
+        }
+
         window.toggleMinMax = function(action) {
             const chatUi = document.getElementById('chat-ui');
             const minText = document.getElementById('minimized-text');
+            const isMobile = window.matchMedia('(max-width: 700px)').matches;
+
             if (action === 'min' || (action === undefined && !isMinimized)) {
-                chatUi.classList.remove('maximized'); chatUi.classList.add('minimized'); isMinimized = true; isMaximized = false;
-                minText.innerText = unreadCount > 0 ? `${unreadCount} New Messages` : "Messages";
+                if (isMobile && !isMinimized) {
+                    chatUi.classList.remove('mobile-opening');
+                    chatUi.classList.add('mobile-closing');
+                    setTimeout(() => finishMobileMinimize(chatUi, minText), 190);
+                } else {
+                    finishMobileMinimize(chatUi, minText);
+                }
             } else if (action === 'max') {
-                chatUi.classList.remove('minimized'); 
-                if(isMaximized) { chatUi.classList.remove('maximized'); isMaximized = false; } else { chatUi.classList.add('maximized'); isMaximized = true; isMinimized = false; }
-            } else { 
-                chatUi.classList.remove('minimized'); if(isMaximized) chatUi.classList.add('maximized'); isMinimized = false; clearUnreadState(); setTimeout(() => pinChatToLatest(state.chatContext), 100);
+                chatUi.classList.remove('minimized');
+                if(isMaximized) {
+                    chatUi.classList.remove('maximized'); isMaximized = false;
+                } else {
+                    chatUi.classList.add('maximized'); isMaximized = true; isMinimized = false;
+                }
+            } else {
+                const wasMinimized = isMinimized;
+                chatUi.classList.remove('minimized', 'mobile-closing');
+                if(isMaximized) chatUi.classList.add('maximized');
+                isMinimized = false;
+                clearUnreadState();
+                if (isMobile && wasMinimized) {
+                    chatUi.classList.remove('mobile-opening');
+                    void chatUi.offsetWidth;
+                    chatUi.classList.add('mobile-opening');
+                    setTimeout(() => chatUi.classList.remove('mobile-opening'), 300);
+                }
+                setTimeout(() => pinChatToLatest(state.chatContext), isMobile ? 40 : 100);
             }
         };
 
-        document.getElementById('search-input').addEventListener('input', (e) => {
-            const term = e.target.value.trim().toLowerCase();
-            const visibleGroups = Array.from(document.querySelectorAll('.msg-group'));
+        const searchInput = document.getElementById('search-input');
+        const searchNav = document.getElementById('search-nav');
+        const searchCount = document.getElementById('search-count');
+        const searchPrev = document.getElementById('search-prev');
+        const searchNext = document.getElementById('search-next');
+        const searchClose = document.getElementById('search-close');
+
+        function isSearchableMessage(data) {
+            return data && data.type !== 'bot' && data.user !== 'System';
+        }
+
+        function clearSearchHighlights() {
+            chatWindow.querySelectorAll('.message-bubble.search-match, .message-bubble.search-current').forEach(el => {
+                el.classList.remove('search-match', 'search-current');
+            });
+        }
+
+        function updateSearchNav() {
+            const active = searchTerm.length > 0;
+            searchNav.classList.toggle('active', active);
+            document.querySelector('.chat-header').classList.toggle('search-active', active);
+            const total = searchResults.length;
+            const shownIndex = total > 0 && searchIndex >= 0 ? searchIndex + 1 : 0;
+            searchCount.innerText = `${shownIndex}/${total}`;
+            searchPrev.disabled = total === 0;
+            searchNext.disabled = total === 0;
+        }
+
+        function applySearchFilter() {
+            const term = searchTerm;
             const newMsgNotification = document.getElementById('new-msg-notification');
             const divider = document.querySelector('.new-msg-divider');
             newMsgNotification.style.display = term === '' && unreadCount > 0 && !isMinimized ? 'block' : 'none';
             if (divider) divider.style.display = term === '' ? 'flex' : 'none';
 
-            visibleGroups.forEach(g => {
-                const isDM = g.dataset.isDm === 'true';
-                const dmPartner = g.dataset.dmPartner;
-                const inContext = (state.chatContext === 'public' && !isDM) || (isDM && dmPartner === state.chatContext);
-                if (!inContext) {
-                    g.style.display = 'none';
-                    return;
-                }
-                if (term === '') {
-                    g.style.display = 'flex';
-                    return;
-                }
-                const bubbles = Array.from(g.querySelectorAll('.message-bubble'));
-                const match = bubbles.some(bubble => bubble.innerText.toLowerCase().includes(term));
-                g.style.display = match ? 'flex' : 'none';
+            chatWindow.querySelectorAll('.message.bot').forEach(row => {
+                row.style.display = term === '' ? '' : 'none';
             });
+
+            clearSearchHighlights();
+            Array.from(chatWindow.querySelectorAll('.msg-group')).forEach(group => {
+                const bubbles = Array.from(group.querySelectorAll('.message-bubble'));
+                if (term === '') {
+                    group.style.display = 'flex';
+                    bubbles.forEach(bubble => { bubble.style.display = ''; });
+                    return;
+                }
+                let matches = 0;
+                bubbles.forEach(bubble => {
+                    const isMatch = bubble.innerText.toLowerCase().includes(term);
+                    bubble.style.display = isMatch ? '' : 'none';
+                    if (isMatch) {
+                        matches++;
+                        bubble.classList.add('search-match');
+                    }
+                });
+                group.style.display = matches ? 'flex' : 'none';
+            });
+        }
+
+        function requestSearch(term) {
+            clearTimeout(searchTimer);
+            const trimmed = term.trim();
+            const nextTerm = trimmed.toLowerCase();
+            const wasSearching = searchTerm.length > 0;
+
+            if (!wasSearching && nextTerm) {
+                searchRestoreAnchor = captureScrollAnchor();
+                searchRestoreWasBottom = isUserAtBottom;
+            }
+
+            searchTerm = nextTerm;
+            searchResults = [];
+            searchIndex = -1;
+
+            if (!trimmed) {
+                if (searchContextActive) {
+                    searchContextActive = false;
+                    const conversation = getConversation();
+                    syncActiveHistory();
+                    renderHistory(conversation.messages, state.currentUser ? state.currentUser.username : '', { scrollBottom: false });
+                    requestAnimationFrame(() => {
+                        if (searchRestoreWasBottom) pinChatToLatest(state.chatContext);
+                        else if (searchRestoreAnchor && searchRestoreAnchor.id) scrollToMessage(searchRestoreAnchor.id);
+                    });
+                } else {
+                    applySearchFilter();
+                }
+                searchRestoreAnchor = null;
+                updateSearchNav();
+                return;
+            }
+
+            applySearchFilter();
+            updateSearchNav();
+            const requestId = ++searchRequestSeq;
+            searchTimer = setTimeout(() => {
+                socket.emit('searchMessages', { context: state.chatContext, term: trimmed, requestId });
+            }, 160);
+        }
+
+        function jumpToSearchResult(index) {
+            if (!searchResults.length) return;
+            const total = searchResults.length;
+            searchIndex = ((index % total) + total) % total;
+            updateSearchNav();
+
+            const result = searchResults[searchIndex];
+            const id = messageIdOf(result);
+            if (!id) return;
+
+            const existing = document.getElementById(id);
+            if (existing) {
+                clearSearchHighlights();
+                existing.classList.add('search-match', 'search-current');
+                existing.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                setTimeout(() => existing.classList.remove('search-current'), 1250);
+                return;
+            }
+
+            const searchJumpId = ++searchJumpSeq;
+            socket.emit('loadContext', { context: state.chatContext, msgId: id, searchRequestId: searchRequestSeq, searchJumpId });
+        }
+
+        searchInput.addEventListener('input', (e) => requestSearch(e.target.value));
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && searchTerm) {
+                e.preventDefault();
+                jumpToSearchResult(searchIndex < 0 ? 0 : searchIndex + (e.shiftKey ? -1 : 1));
+            } else if (e.key === 'Escape' && searchTerm) {
+                searchInput.value = '';
+                requestSearch('');
+                searchInput.blur();
+            }
+        });
+        searchPrev.addEventListener('click', () => jumpToSearchResult(searchIndex < 0 ? searchResults.length - 1 : searchIndex - 1));
+        searchNext.addEventListener('click', () => jumpToSearchResult(searchIndex < 0 ? 0 : searchIndex + 1));
+        searchClose.addEventListener('click', () => {
+            searchInput.value = '';
+            requestSearch('');
+            searchInput.blur();
         });
 
         function requestMoreHistory(context = state.chatContext) {
@@ -601,6 +803,7 @@
         }
 
         function maybeLoadOlderMessages() {
+            if (searchTerm) return;
             const conversation = getConversation();
             if (!conversation.loaded || conversation.loading || !conversation.hasMore || conversation.messages.length === 0) return;
             if (chatWindow.scrollTop <= 80 || chatWindow.scrollHeight <= chatWindow.clientHeight + 8) {
@@ -609,6 +812,7 @@
         }
 
         function ensureScrollableHistory() {
+            if (searchTerm) return;
             requestAnimationFrame(() => {
                 const conversation = getConversation();
                 if (conversation.loaded && conversation.hasMore && !conversation.loading && chatWindow.scrollHeight <= chatWindow.clientHeight + 8) {
@@ -690,6 +894,16 @@
 
         function showConversation(context, { scrollBottom = true } = {}) {
             state.chatContext = context;
+            searchRequestSeq++;
+            clearTimeout(searchTimer);
+            searchInput.value = '';
+            searchTerm = '';
+            searchResults = [];
+            searchIndex = -1;
+            searchContextActive = false;
+            searchRestoreAnchor = null;
+            searchRestoreWasBottom = true;
+            updateSearchNav();
             const conversation = getConversation(context);
             syncActiveHistory();
             currentReply = null;
@@ -819,6 +1033,7 @@
                     }
                 };
                 item.oncontextmenu = (e) => { e.preventDefault(); if(confirm("Unpin?")) socket.emit('unpinMessage', msg.msgId || msg._id); };
+                addLongPressAction(item, () => { if(confirm("Unpin?")) socket.emit('unpinMessage', msg.msgId || msg._id); });
                 list.appendChild(item);
             });
         }
@@ -910,6 +1125,47 @@
             if (!Number.isFinite(boundaryTs)) return false;
             const diff = prepend ? boundaryTs - validTimestamp : validTimestamp - boundaryTs;
             return diff >= 0 && diff < 300000;
+        }
+
+        function addLongPressAction(element, callback, { delay = 520, moveTolerance = 12 } = {}) {
+            let timer = null;
+            let startX = 0;
+            let startY = 0;
+            let suppressClick = false;
+
+            const cancel = () => {
+                if (timer) clearTimeout(timer);
+                timer = null;
+            };
+
+            element.addEventListener('pointerdown', (event) => {
+                if (event.pointerType === 'mouse' || event.button !== 0) return;
+                startX = event.clientX;
+                startY = event.clientY;
+                suppressClick = false;
+                cancel();
+                timer = setTimeout(() => {
+                    timer = null;
+                    suppressClick = true;
+                    if (navigator.vibrate) navigator.vibrate(18);
+                    callback({ clientX: startX, clientY: startY, pointerType: event.pointerType });
+                }, delay);
+            }, { passive: true });
+
+            element.addEventListener('pointermove', (event) => {
+                if (!timer) return;
+                if (Math.hypot(event.clientX - startX, event.clientY - startY) > moveTolerance) cancel();
+            }, { passive: true });
+
+            element.addEventListener('pointerup', cancel, { passive: true });
+            element.addEventListener('pointercancel', cancel, { passive: true });
+            element.addEventListener('lostpointercapture', cancel, { passive: true });
+            element.addEventListener('click', (event) => {
+                if (!suppressClick) return;
+                suppressClick = false;
+                event.preventDefault();
+                event.stopImmediatePropagation();
+            }, true);
         }
 
         function addMessageToUI(data, isSelf, options = {}) {
@@ -1061,6 +1317,7 @@
                 }
 
                 bubble.addEventListener('contextmenu', (e) => { e.stopPropagation(); showContext(e, data); });
+                addLongPressAction(bubble, (point) => showContextAt(point.clientX, point.clientY, data));
                 bubble.addEventListener('dblclick', (e) => { e.stopPropagation(); socket.emit('pinMessage', data); });
 
                 if (prepend) {
@@ -1079,13 +1336,7 @@
                 }
             }
 
-            if(document.getElementById('search-input').value.trim() !== '') {
-                const term = document.getElementById('search-input').value.trim().toLowerCase();
-                const affectedGroup = prepend ? chatWindow.firstElementChild : currentGroup;
-                if(affectedGroup && affectedGroup.classList.contains('msg-group')) {
-                    affectedGroup.style.display = affectedGroup.innerText.toLowerCase().includes(term) ? 'flex' : 'none';
-                }
-            }
+            if (searchTerm) applySearchFilter();
             if (!prepend && (isUserAtBottom || isSelf) && !isMinimized) chatWindow.scrollTop = chatWindow.scrollHeight;
         }
 
@@ -1230,17 +1481,45 @@
                 ensureScrollableHistory();
             });
 
-            socket.on('contextHistory', ({ context = 'public', messages, targetId }) => {
-                const conversation = getConversation(context);
-                conversation.messages = Array.isArray(messages) ? messages : [];
-                conversation.loaded = true;
-                conversation.loading = false;
-                conversation.requestId = null;
-                conversation.hasMore = true;
+            socket.on('contextHistory', ({ context = 'public', messages, targetId, searchRequestId = null, searchJumpId = null }) => {
                 if (context !== state.chatContext) return;
-                syncActiveHistory();
-                renderHistory(conversation.messages, state.currentUser.username, { scrollBottom: false });
-                setTimeout(() => { scrollToMessage(targetId); }, 150);
+                if (searchRequestId !== null && (searchRequestId !== searchRequestSeq || searchJumpId !== searchJumpSeq || !searchTerm)) return;
+                const contextMessages = Array.isArray(messages) ? messages : [];
+                const conversation = getConversation(context);
+
+                if (searchTerm) {
+                    searchContextActive = true;
+                    renderHistory(contextMessages, state.currentUser.username, { scrollBottom: false });
+                } else {
+                    conversation.messages = contextMessages;
+                    conversation.loaded = true;
+                    conversation.loading = false;
+                    conversation.requestId = null;
+                    conversation.hasMore = true;
+                    syncActiveHistory();
+                    renderHistory(conversation.messages, state.currentUser.username, { scrollBottom: false });
+                }
+
+                setTimeout(() => {
+                    applySearchFilter();
+                    const target = document.getElementById(targetId);
+                    if (target) {
+                        target.style.display = '';
+                        const group = target.closest('.msg-group');
+                        if (group) group.style.display = 'flex';
+                        target.classList.add('search-match', 'search-current');
+                        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        setTimeout(() => target.classList.remove('search-current'), 1250);
+                    }
+                }, 150);
+            });
+
+            socket.on('searchResults', ({ context = 'public', term = '', results = [], requestId = null } = {}) => {
+                if (context !== state.chatContext || requestId !== searchRequestSeq) return;
+                if (term.trim().toLowerCase() !== searchTerm) return;
+                searchResults = (Array.isArray(results) ? results : []).filter(isSearchableMessage);
+                searchIndex = -1;
+                updateSearchNav();
             });
 
             socket.on('updateUsers', (users) => {
@@ -1326,9 +1605,28 @@
         document.getElementById('file-input').addEventListener('change', function() { const files = Array.from(this.files); if(files.length === 0) return; files.forEach(file => { const reader = new FileReader(); reader.onload = (e) => { pendingFiles.push({ name: file.name, type: file.type, data: e.target.result }); updateContextBar(); }; reader.readAsDataURL(file); }); this.value = ''; });
         window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
         const ctxMenu = document.getElementById('context-menu'); let selectedMsgData = null;
-        function showContext(e, data) { e.preventDefault(); selectedMsgData = data; const rect = chatUi.getBoundingClientRect(); let x = e.pageX; let y = e.pageY; if (y + 100 > window.innerHeight) y -= 100; ctxMenu.style.display = 'flex'; ctxMenu.style.left = x + 'px'; ctxMenu.style.top = y + 'px'; }
+        function showContextAt(x, y, data) {
+            selectedMsgData = data;
+            ctxMenu.style.display = 'flex';
+            if (window.matchMedia('(max-width: 700px)').matches) {
+                ctxMenu.style.left = '12px';
+                ctxMenu.style.top = 'auto';
+                return;
+            }
+            const menuWidth = 152;
+            const menuHeight = 104;
+            const safeX = Math.max(8, Math.min(Number(x) || 8, window.innerWidth - menuWidth - 8));
+            const safeY = Math.max(8, Math.min(Number(y) || 8, window.innerHeight - menuHeight - 8));
+            ctxMenu.style.left = `${safeX}px`;
+            ctxMenu.style.top = `${safeY}px`;
+        }
+        function showContext(e, data) {
+            if (e && typeof e.preventDefault === 'function') e.preventDefault();
+            showContextAt(e && (e.clientX ?? e.pageX), e && (e.clientY ?? e.pageY), data);
+        }
         document.getElementById('ctx-reply').addEventListener('click', () => { if(selectedMsgData) { currentReply = selectedMsgData; updateContextBar(); document.getElementById('msg-input').focus(); } ctxMenu.style.display = 'none'; });
         document.getElementById('ctx-pin').addEventListener('click', () => { if(selectedMsgData) socket.emit('pinMessage', selectedMsgData); ctxMenu.style.display = 'none'; });
+        document.getElementById('ctx-cancel').addEventListener('click', () => { ctxMenu.style.display = 'none'; });
         document.addEventListener('click', (e) => { if(!ctxMenu.contains(e.target)) ctxMenu.style.display = 'none'; });
     </script>
 </body>

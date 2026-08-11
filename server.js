@@ -75,6 +75,10 @@ function isMongoId(value) {
     return /^[a-f\d]{24}$/i.test(normalizeId(value));
 }
 
+function escapeRegex(value) {
+    return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function getContextQuery(context, currentUser) {
     if (context === 'public') return { toUser: null };
     return {
@@ -357,7 +361,54 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('loadContext', async ({ context = 'public', msgId } = {}) => {
+    socket.on('searchMessages', async ({ context = 'public', term = '', requestId = null } = {}) => {
+        const currentUser = activeUsers[socket.id];
+        if (!currentUser) return;
+
+        const cleanTerm = typeof term === 'string' ? term.trim().slice(0, 100) : '';
+        if (!cleanTerm) {
+            socket.emit('searchResults', { context, term: '', results: [], requestId });
+            return;
+        }
+
+        try {
+            let results = [];
+            if (isDbConnected) {
+                const contextQuery = getContextQuery(context, currentUser.username);
+                const regex = new RegExp(escapeRegex(cleanTerm), 'i');
+                const query = {
+                    $and: [
+                        contextQuery,
+                        { type: { $ne: 'bot' } },
+                        { user: { $ne: 'System' } },
+                        { text: regex }
+                    ]
+                };
+                const rows = await Message.find(query)
+                    .sort({ timestamp: -1, _id: -1 })
+                    .limit(100)
+                    .select('_id user toUser text timestamp type')
+                    .lean();
+                results = rows.reverse();
+            } else {
+                const lower = cleanTerm.toLowerCase();
+                results = chatHistory.filter(message =>
+                    messageMatchesContext(message, context, currentUser.username) &&
+                    message.type !== 'bot' &&
+                    message.user !== 'System' &&
+                    typeof message.text === 'string' &&
+                    message.text.toLowerCase().includes(lower)
+                ).slice(-100);
+            }
+
+            socket.emit('searchResults', { context, term: cleanTerm, results, requestId });
+        } catch (e) {
+            console.error(e);
+            socket.emit('searchResults', { context, term: cleanTerm, results: [], requestId });
+        }
+    });
+
+    socket.on('loadContext', async ({ context = 'public', msgId, searchRequestId = null, searchJumpId = null } = {}) => {
         const currentUser = activeUsers[socket.id];
         if (!currentUser || !msgId) return;
 
@@ -374,7 +425,9 @@ io.on('connection', (socket) => {
                 socket.emit('contextHistory', {
                     context,
                     messages: await hydrateMessageProfiles([...before.reverse(), targetMsg, ...after]),
-                    targetId: msgId
+                    targetId: msgId,
+                    searchRequestId,
+                    searchJumpId
                 });
             } else {
                 const contextMessages = chatHistory.filter(message =>
@@ -389,7 +442,9 @@ io.on('connection', (socket) => {
                 socket.emit('contextHistory', {
                     context,
                     messages: await hydrateMessageProfiles(contextMessages.slice(start, end)),
-                    targetId: msgId
+                    targetId: msgId,
+                    searchRequestId,
+                    searchJumpId
                 });
             }
         } catch (e) {
