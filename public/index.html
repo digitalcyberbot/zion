@@ -11,9 +11,9 @@
         { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
     </script>
     <style>
-        :root { --blue-bubble: #007AFF; --gray-bubble: #262628; --bg-color: #000000; --glass-bg: rgba(30, 30, 30, 0.75); --border-color: rgba(255,255,255,0.15); --user-color: #007AFF; }
+        :root { --blue-bubble: #007AFF; --gray-bubble: #262628; --bg-color: #000000; --scene-bg: #87CEEB; --glass-bg: rgba(30, 30, 30, 0.75); --border-color: rgba(255,255,255,0.15); --user-color: #007AFF; }
         body { margin: 0; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg-color); color: white; }
-        #bg-canvas { position: fixed; top: 0; left: 0; z-index: -1; }
+        #bg-canvas { position: fixed; inset: 0; z-index: -1; display: block; width: 100vw; height: 100vh; }
         #loading-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(20,20,20,0.9); z-index: 500; display: none; justify-content: center; align-items: center; }
         #loading-screen.active { display: flex; }
         .spinner { width: 40px; height: 40px; border: 4px solid rgba(255, 255, 255, 0.1); border-top: 4px solid var(--user-color); border-radius: 50%; animation: spin 1s linear infinite; }
@@ -63,16 +63,23 @@
         .header-left-group { display: flex; gap: 5px; flex: 1; justify-content: flex-start; } 
         .header-center-group { flex: 2; display: flex; justify-content: center; } 
         .header-right-group { display: flex; gap: 5px; flex: 1; justify-content: flex-end; } 
-        #search-input { background: rgba(0,0,0,0.3); border: none; color: white; padding: 8px 15px; border-radius: 20px; font-size: 0.9rem; width: 100%; max-width: 250px; box-sizing: border-box; outline: none; text-align: center;}
-        #search-nav { display: none; align-items: center; gap: 3px; margin-left: 6px; flex-shrink: 0; }
-        #search-nav.active { display: flex; }
-        .search-nav-btn { width: 28px; height: 28px; border: none; border-radius: 50%; background: rgba(255,255,255,0.1); color: white; cursor: pointer; font-size: 0.85rem; line-height: 1; }
-        .search-nav-btn:disabled { opacity: 0.35; cursor: default; }
-        .search-close-btn { display: none; }
-        #search-count { min-width: 42px; text-align: center; color: #bbb; font-size: 0.72rem; white-space: nowrap; }
-        .message-bubble.search-match { outline: 1px solid rgba(255,255,255,0.4); outline-offset: -1px; }
+        #search-input { background: rgba(0,0,0,0.3); border: none; color: white; padding: 8px 15px; border-radius: 20px; font-size: 0.9rem; width: 100%; max-width: 250px; box-sizing: border-box; outline: none; text-align: left; }
+        #search-input:focus { background: rgba(0,0,0,0.45); }
         .message-bubble.search-current { animation: searchPulse 1.2s ease; outline: 2px solid rgba(255,255,255,0.9); outline-offset: 2px; }
         @keyframes searchPulse { 0% { transform: scale(0.98); } 45% { transform: scale(1.015); } 100% { transform: scale(1); } }
+        #search-panel { top: 50px; height: calc(100% - 50px); z-index: 19; }
+        #search-results-list { padding: 8px 10px 14px; }
+        .search-summary { color: #aaa; font-size: 0.78rem; padding: 4px 4px 10px; }
+        .search-result { display: flex; gap: 10px; padding: 11px 10px; border-radius: 10px; cursor: pointer; transition: background 0.15s; }
+        .search-result:hover { background: rgba(255,255,255,0.08); }
+        .search-result-pfp { width: 34px; height: 34px; border-radius: 50%; flex: 0 0 34px; object-fit: cover; background: #333; }
+        .search-result-body { min-width: 0; flex: 1; }
+        .search-result-meta { display: flex; align-items: baseline; gap: 7px; margin-bottom: 3px; min-width: 0; }
+        .search-result-user { font-size: 0.82rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .search-result-time { color: #777; font-size: 0.68rem; white-space: nowrap; }
+        .search-result-text { color: #ddd; font-size: 0.86rem; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+        .search-result-text mark { background: rgba(255, 214, 10, 0.3); color: inherit; border-radius: 3px; padding: 0 1px; }
+        .search-empty { padding: 34px 18px; text-align: center; color: #777; font-size: 0.9rem; }
         .header-icon-btn { background: transparent; border: none; color: #ccc; cursor: pointer; padding: 8px; font-size: 1.2rem; position: relative; width: 30px; text-align: center; }
         .notification-badge { position: absolute; top: -2px; right: -2px; background: #ff3b30; color: white; border-radius: 50%; padding: 2px 5px; font-size: 0.7rem; font-weight: bold; min-width: 14px; text-align: center; display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.5); animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
         @keyframes popIn { from { transform: scale(0); } to { transform: scale(1); } }
@@ -156,7 +163,9 @@
 
         /* Phone-only layout. Desktop/tablet sizing above 700px is intentionally unchanged. */
         @media (max-width: 700px) {
-            body { overscroll-behavior: none; }
+            html { width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; background: var(--scene-bg); }
+            body { position: fixed; inset: 0; width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; background: transparent; }
+            #bg-canvas { inset: -1px; z-index: 0; pointer-events: none; width: calc(100vw + 2px) !important; height: calc(100dvh + 2px) !important; min-width: calc(100% + 2px); min-height: calc(100% + 2px); }
             .mobile-only { display: inline-flex; }
             .desktop-size-control { display: none; }
             #profile-modal { z-index: 400; }
@@ -166,15 +175,15 @@
 
             .login-card { width: calc(100vw - 32px); max-width: 360px; padding: 28px 22px; box-sizing: border-box; }
             .profile-card {
-                position: fixed; inset: 0; width: 100%; height: 100vh; height: var(--mobile-viewport-height, 100dvh); min-height: 0; max-height: none;
+                position: fixed; top: var(--mobile-viewport-top, 0px); left: var(--mobile-viewport-left, 0px); width: var(--mobile-viewport-width, 100vw); height: var(--mobile-viewport-height, 100dvh); min-height: 0; max-height: none;
                 padding: calc(22px + env(safe-area-inset-top)) 18px calc(18px + env(safe-area-inset-bottom));
                 border-radius: 0; box-sizing: border-box;
             }
             .close-btn { top: calc(14px + env(safe-area-inset-top)); right: 14px; min-width: 44px; min-height: 44px; }
 
             .chat-container, .chat-container.maximized {
-                position: fixed; inset: 0; width: 100%; height: 100vh; height: var(--mobile-viewport-height, 100dvh); left: 0; bottom: 0;
-                border-radius: 0; border-left: 0; border-right: 0; transition: none;
+                position: fixed; top: var(--mobile-viewport-top, 0px); left: var(--mobile-viewport-left, 0px); width: var(--mobile-viewport-width, 100vw); height: var(--mobile-viewport-height, 100dvh); right: auto; bottom: auto;
+                border-radius: 0; border-left: 0; border-right: 0; box-sizing: border-box; transition: none;
             }
             .chat-container.mobile-opening { animation: mobileChatOpen 0.28s cubic-bezier(0.16, 1, 0.3, 1); }
             .chat-container.mobile-closing { animation: mobileChatClose 0.2s ease-in forwards; pointer-events: none; }
@@ -201,12 +210,9 @@
             .header-center-group { flex: 1 1 auto; min-width: 0; padding: 0 4px; }
             .header-icon-btn { width: 38px; height: 38px; padding: 6px; font-size: 1.1rem; touch-action: manipulation; }
             #search-input { min-width: 0; max-width: none; width: auto; flex: 1 1 auto; padding: 8px 10px; font-size: 16px; }
-            #search-nav { margin-left: 2px; gap: 2px; }
-            .search-nav-btn { width: 34px; height: 34px; font-size: 0.95rem; touch-action: manipulation; }
-            .search-close-btn { display: inline-block; }
-            #search-count { min-width: 36px; font-size: 0.68rem; }
-            .chat-header.search-active .header-left-group, .chat-header.search-active .header-right-group { display: none; }
-            .chat-header.search-active .header-center-group { padding: 0 2px; }
+            #search-panel { top: calc(52px + env(safe-area-inset-top)); height: calc(100% - 52px - env(safe-area-inset-top)); }
+            .search-result { padding: 13px 10px; }
+            .search-result-pfp { width: 38px; height: 38px; flex-basis: 38px; }
 
             #dm-banner { padding: 10px 12px; font-size: 0.82rem; flex-shrink: 0; }
             #chat-window {
@@ -334,16 +340,9 @@
                 <button class="header-icon-btn desktop-size-control" onclick="toggleMinMax('max')" title="Maximize">🟢</button>
             </div>
             <div class="header-center-group">
-                <input id="search-input" placeholder="Search" autocomplete="off">
-                <div id="search-nav" aria-live="polite">
-                    <span id="search-count">0/0</span>
-                    <button type="button" class="search-nav-btn" id="search-prev" title="Previous result" aria-label="Previous search result">↑</button>
-                    <button type="button" class="search-nav-btn" id="search-next" title="Next result" aria-label="Next search result">↓</button>
-                    <button type="button" class="search-nav-btn search-close-btn" id="search-close" title="Close search" aria-label="Close search">×</button>
-                </div>
+                <input id="search-input" placeholder="Search messages" autocomplete="off" aria-label="Search messages">
             </div>
             <div class="header-right-group">
-                <button class="header-icon-btn mobile-only" onclick="openProfileEditor()" title="Profile">👤</button>
                 <button class="header-icon-btn" id="dm-toggle" title="Direct Messages">✉️ <div id="dm-badge" class="notification-badge">0</div></button>
                 <button class="header-icon-btn" id="pins-toggle" title="Pinned Messages">📌</button>
             </div>
@@ -355,6 +354,10 @@
         <div id="dm-panel" class="side-panel">
             <div class="panel-header"><span>Direct Messages</span><span style="cursor:pointer;" onclick="togglePanel('dm-panel')">✕</span></div>
             <div class="panel-list" id="dm-list"></div>
+        </div>
+        <div id="search-panel" class="side-panel">
+            <div class="panel-header"><span id="search-panel-title">Search Results</span><span style="cursor:pointer;" id="search-panel-close" title="Close results">✕</span></div>
+            <div class="panel-list" id="search-results-list"></div>
         </div>
         <div id="dm-banner" onclick="switchToPublicChat()">Now messaging privately. Click to return to public chat.</div>
         <div id="chat-window"></div>
@@ -410,10 +413,28 @@
             return Object.values(state.users || {}).find(user => user && user.username === username) || null;
         }
 
+        function cacheProfile(profile) {
+            if (!profile || !profile.username) return;
+            state.profileCache[profile.username] = {
+                ...(state.profileCache[profile.username] || {}),
+                ...profile
+            };
+        }
+
+        function cacheProfiles(profiles) {
+            if (!profiles) return;
+            if (Array.isArray(profiles)) profiles.forEach(cacheProfile);
+            else Object.values(profiles).forEach(cacheProfile);
+        }
+
+        function findKnownUser(username) {
+            return findActiveUser(username) || state.profileCache[username] || null;
+        }
+
         function setSafeAvatar(img, username, snapshot = {}) {
             if (!img) return;
-            const liveUser = findActiveUser(username);
-            const sourceUser = liveUser || {
+            const knownUser = findKnownUser(username);
+            const sourceUser = knownUser || {
                 pfp: snapshot.userPfp || snapshot.pfp || '',
                 color: snapshot.userColor || snapshot.color || '#666'
             };
@@ -435,8 +456,8 @@
 
         function refreshVisibleAvatars() {
             document.querySelectorAll('.msg-pfp[data-username]').forEach(img => {
-                const liveUser = findActiveUser(img.dataset.username);
-                if (liveUser) setSafeAvatar(img, img.dataset.username, liveUser);
+                const knownUser = findKnownUser(img.dataset.username);
+                if (knownUser) setSafeAvatar(img, img.dataset.username, knownUser);
             });
         }
 
@@ -480,7 +501,7 @@
                 .replaceAll("'", '&#039;');
         }
 
-        const state = { currentUser: null, users: {}, history: [], chatContext: 'public', dmContacts: new Set(), unread: {}, pinned: [] };
+        const state = { currentUser: null, users: {}, profileCache: {}, history: [], chatContext: 'public', dmContacts: new Set(), unread: {}, pinned: [] };
         const conversationState = new Map();
         let isUserAtBottom = true; let unreadCount = 0; let dividerElement = null; let isMinimized = false; let isMaximized = false; let pfpPendingReset = false;
         let historyRequestSeq = 0;
@@ -489,7 +510,6 @@
         let searchJumpSeq = 0;
         let searchTimer = null;
         let searchResults = [];
-        let searchIndex = -1;
         let searchTerm = '';
         let searchContextActive = false;
         let searchRestoreAnchor = null;
@@ -644,147 +664,214 @@
         };
 
         const searchInput = document.getElementById('search-input');
-        const searchNav = document.getElementById('search-nav');
-        const searchCount = document.getElementById('search-count');
-        const searchPrev = document.getElementById('search-prev');
-        const searchNext = document.getElementById('search-next');
-        const searchClose = document.getElementById('search-close');
+        const searchPanel = document.getElementById('search-panel');
+        const searchPanelTitle = document.getElementById('search-panel-title');
+        const searchResultsList = document.getElementById('search-results-list');
+        const searchPanelClose = document.getElementById('search-panel-close');
 
         function isSearchableMessage(data) {
-            return data && data.type !== 'bot' && data.user !== 'System';
+            if (!data || data.user === 'System' || typeof data.text !== 'string' || !data.text.trim()) return false;
+            const type = String(data.type || 'user').toLowerCase();
+            return !['bot', 'system', 'notification'].includes(type);
         }
 
         function clearSearchHighlights() {
-            chatWindow.querySelectorAll('.message-bubble.search-match, .message-bubble.search-current').forEach(el => {
-                el.classList.remove('search-match', 'search-current');
-            });
+            chatWindow.querySelectorAll('.message-bubble.search-current').forEach(el => el.classList.remove('search-current'));
         }
 
-        function updateSearchNav() {
-            const active = searchTerm.length > 0;
-            searchNav.classList.toggle('active', active);
-            document.querySelector('.chat-header').classList.toggle('search-active', active);
-            const total = searchResults.length;
-            const shownIndex = total > 0 && searchIndex >= 0 ? searchIndex + 1 : 0;
-            searchCount.innerText = `${shownIndex}/${total}`;
-            searchPrev.disabled = total === 0;
-            searchNext.disabled = total === 0;
+        function closeSearchPanel() {
+            searchPanel.classList.remove('open');
         }
 
-        function applySearchFilter() {
-            const term = searchTerm;
-            const newMsgNotification = document.getElementById('new-msg-notification');
-            const divider = document.querySelector('.new-msg-divider');
-            newMsgNotification.style.display = term === '' && unreadCount > 0 && !isMinimized ? 'block' : 'none';
-            if (divider) divider.style.display = term === '' ? 'flex' : 'none';
-
-            chatWindow.querySelectorAll('.message.bot').forEach(row => {
-                row.style.display = term === '' ? '' : 'none';
+        function openSearchPanel() {
+            if (!searchTerm) return;
+            document.querySelectorAll('.side-panel').forEach(panel => {
+                if (panel !== searchPanel) panel.classList.remove('open');
             });
+            searchPanel.classList.add('open');
+        }
 
-            clearSearchHighlights();
-            Array.from(chatWindow.querySelectorAll('.msg-group')).forEach(group => {
-                const bubbles = Array.from(group.querySelectorAll('.message-bubble'));
-                if (term === '') {
-                    group.style.display = 'flex';
-                    bubbles.forEach(bubble => { bubble.style.display = ''; });
-                    return;
+        function appendHighlightedText(container, text, term) {
+            const value = String(text || '');
+            const query = String(term || '');
+            if (!query) {
+                container.textContent = value;
+                return;
+            }
+            const lowerValue = value.toLowerCase();
+            const lowerQuery = query.toLowerCase();
+            let offset = 0;
+            while (offset < value.length) {
+                const index = lowerValue.indexOf(lowerQuery, offset);
+                if (index === -1) {
+                    container.appendChild(document.createTextNode(value.slice(offset)));
+                    break;
                 }
-                let matches = 0;
-                bubbles.forEach(bubble => {
-                    const isMatch = bubble.innerText.toLowerCase().includes(term);
-                    bubble.style.display = isMatch ? '' : 'none';
-                    if (isMatch) {
-                        matches++;
-                        bubble.classList.add('search-match');
+                if (index > offset) container.appendChild(document.createTextNode(value.slice(offset, index)));
+                const mark = document.createElement('mark');
+                mark.textContent = value.slice(index, index + query.length);
+                container.appendChild(mark);
+                offset = index + query.length;
+            }
+        }
+
+        function renderSearchResults({ loading = false } = {}) {
+            searchResultsList.innerHTML = '';
+            if (!searchTerm) return;
+
+            if (loading) {
+                searchPanelTitle.textContent = 'Search Results';
+                const loadingRow = document.createElement('div');
+                loadingRow.className = 'search-empty';
+                loadingRow.textContent = 'Searching…';
+                searchResultsList.appendChild(loadingRow);
+                return;
+            }
+
+            const validResults = searchResults.filter(isSearchableMessage);
+            searchPanelTitle.textContent = `Search Results — ${validResults.length}`;
+            const summary = document.createElement('div');
+            summary.className = 'search-summary';
+            summary.textContent = validResults.length
+                ? `Showing messages matching “${searchInput.value.trim()}”`
+                : `No messages found for “${searchInput.value.trim()}”`;
+            searchResultsList.appendChild(summary);
+
+            if (!validResults.length) {
+                const empty = document.createElement('div');
+                empty.className = 'search-empty';
+                empty.textContent = 'Try a different search term.';
+                searchResultsList.appendChild(empty);
+                return;
+            }
+
+            validResults.forEach((result, index) => {
+                const item = document.createElement('div');
+                item.className = 'search-result';
+                item.tabIndex = 0;
+                item.setAttribute('role', 'button');
+
+                const avatar = document.createElement('img');
+                avatar.className = 'search-result-pfp';
+                setSafeAvatar(avatar, result.user, result);
+
+                const body = document.createElement('div');
+                body.className = 'search-result-body';
+                const meta = document.createElement('div');
+                meta.className = 'search-result-meta';
+                const username = document.createElement('span');
+                username.className = 'search-result-user';
+                username.textContent = result.user || 'Unknown';
+                const timestamp = document.createElement('span');
+                timestamp.className = 'search-result-time';
+                timestamp.textContent = getDynamicTime(result.timestamp);
+                meta.append(username, timestamp);
+
+                const text = document.createElement('div');
+                text.className = 'search-result-text';
+                appendHighlightedText(text, result.text, searchInput.value.trim());
+                body.append(meta, text);
+                item.append(avatar, body);
+
+                const openResult = () => jumpToSearchResult(index);
+                item.addEventListener('click', openResult);
+                item.addEventListener('keydown', event => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        openResult();
                     }
                 });
-                group.style.display = matches ? 'flex' : 'none';
+                searchResultsList.appendChild(item);
             });
+        }
+
+        function restoreConversationAfterSearch() {
+            if (!searchContextActive) return;
+            searchContextActive = false;
+            const conversation = getConversation();
+            syncActiveHistory();
+            renderHistory(conversation.messages, state.currentUser ? state.currentUser.username : '', { scrollBottom: false });
+            requestAnimationFrame(() => {
+                if (searchRestoreWasBottom) pinChatToLatest(state.chatContext);
+                else if (searchRestoreAnchor && searchRestoreAnchor.id) scrollToMessage(searchRestoreAnchor.id);
+            });
+            searchRestoreAnchor = null;
+        }
+
+        function clearSearch() {
+            clearTimeout(searchTimer);
+            searchRequestSeq++;
+            searchJumpSeq++;
+            searchInput.value = '';
+            searchTerm = '';
+            searchResults = [];
+            closeSearchPanel();
+            clearSearchHighlights();
+            restoreConversationAfterSearch();
         }
 
         function requestSearch(term) {
             clearTimeout(searchTimer);
-            const trimmed = term.trim();
-            const nextTerm = trimmed.toLowerCase();
-            const wasSearching = searchTerm.length > 0;
-
-            if (!wasSearching && nextTerm) {
-                searchRestoreAnchor = captureScrollAnchor();
-                searchRestoreWasBottom = isUserAtBottom;
-            }
-
-            searchTerm = nextTerm;
+            const trimmed = String(term || '').trim();
+            searchTerm = trimmed.toLowerCase();
             searchResults = [];
-            searchIndex = -1;
 
             if (!trimmed) {
-                if (searchContextActive) {
-                    searchContextActive = false;
-                    const conversation = getConversation();
-                    syncActiveHistory();
-                    renderHistory(conversation.messages, state.currentUser ? state.currentUser.username : '', { scrollBottom: false });
-                    requestAnimationFrame(() => {
-                        if (searchRestoreWasBottom) pinChatToLatest(state.chatContext);
-                        else if (searchRestoreAnchor && searchRestoreAnchor.id) scrollToMessage(searchRestoreAnchor.id);
-                    });
-                } else {
-                    applySearchFilter();
-                }
-                searchRestoreAnchor = null;
-                updateSearchNav();
+                clearSearch();
                 return;
             }
 
-            applySearchFilter();
-            updateSearchNav();
+            openSearchPanel();
+            renderSearchResults({ loading: true });
             const requestId = ++searchRequestSeq;
             searchTimer = setTimeout(() => {
                 socket.emit('searchMessages', { context: state.chatContext, term: trimmed, requestId });
-            }, 160);
+            }, 180);
         }
 
         function jumpToSearchResult(index) {
-            if (!searchResults.length) return;
-            const total = searchResults.length;
-            searchIndex = ((index % total) + total) % total;
-            updateSearchNav();
-
-            const result = searchResults[searchIndex];
+            const result = searchResults[index];
+            if (!result || !isSearchableMessage(result)) return;
             const id = messageIdOf(result);
             if (!id) return;
 
+            clearSearchHighlights();
+            closeSearchPanel();
             const existing = document.getElementById(id);
             if (existing) {
-                clearSearchHighlights();
-                existing.classList.add('search-match', 'search-current');
+                existing.classList.add('search-current');
                 existing.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                setTimeout(() => existing.classList.remove('search-current'), 1250);
+                setTimeout(() => existing.classList.remove('search-current'), 1400);
                 return;
             }
 
+            if (!searchContextActive) {
+                searchRestoreAnchor = captureScrollAnchor();
+                searchRestoreWasBottom = isUserAtBottom;
+            }
             const searchJumpId = ++searchJumpSeq;
             socket.emit('loadContext', { context: state.chatContext, msgId: id, searchRequestId: searchRequestSeq, searchJumpId });
         }
 
-        searchInput.addEventListener('input', (e) => requestSearch(e.target.value));
-        searchInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && searchTerm) {
-                e.preventDefault();
-                jumpToSearchResult(searchIndex < 0 ? 0 : searchIndex + (e.shiftKey ? -1 : 1));
-            } else if (e.key === 'Escape' && searchTerm) {
-                searchInput.value = '';
-                requestSearch('');
-                searchInput.blur();
+        searchInput.addEventListener('input', event => requestSearch(event.target.value));
+        searchInput.addEventListener('focus', () => {
+            if (searchTerm) {
+                openSearchPanel();
+                renderSearchResults();
             }
         });
-        searchPrev.addEventListener('click', () => jumpToSearchResult(searchIndex < 0 ? searchResults.length - 1 : searchIndex - 1));
-        searchNext.addEventListener('click', () => jumpToSearchResult(searchIndex < 0 ? 0 : searchIndex + 1));
-        searchClose.addEventListener('click', () => {
-            searchInput.value = '';
-            requestSearch('');
-            searchInput.blur();
+        searchInput.addEventListener('keydown', event => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                clearSearch();
+                searchInput.blur();
+            } else if (event.key === 'Enter' && searchTerm) {
+                event.preventDefault();
+                openSearchPanel();
+                if (searchResults.length) renderSearchResults();
+            }
         });
+        searchPanelClose.addEventListener('click', () => { clearSearch(); searchInput.blur(); });
 
         function requestMoreHistory(context = state.chatContext) {
             const conversation = getConversation(context);
@@ -838,25 +925,36 @@
 
         const mobileViewportQuery = window.matchMedia('(max-width: 700px)');
         function syncMobileViewportHeight() {
+            const root = document.documentElement;
             if (!mobileViewportQuery.matches) {
-                document.documentElement.style.removeProperty('--mobile-viewport-height');
+                ['--mobile-viewport-height', '--mobile-viewport-width', '--mobile-viewport-top', '--mobile-viewport-left']
+                    .forEach(name => root.style.removeProperty(name));
                 return;
             }
-            const viewportHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-            document.documentElement.style.setProperty('--mobile-viewport-height', `${Math.round(viewportHeight)}px`);
+            const viewport = window.visualViewport;
+            const viewportHeight = viewport ? viewport.height : window.innerHeight;
+            const viewportWidth = viewport ? viewport.width : window.innerWidth;
+            const viewportTop = viewport ? viewport.offsetTop : 0;
+            const viewportLeft = viewport ? viewport.offsetLeft : 0;
+            root.style.setProperty('--mobile-viewport-height', `${Math.ceil(viewportHeight)}px`);
+            root.style.setProperty('--mobile-viewport-width', `${Math.ceil(viewportWidth)}px`);
+            root.style.setProperty('--mobile-viewport-top', `${Math.floor(viewportTop)}px`);
+            root.style.setProperty('--mobile-viewport-left', `${Math.floor(viewportLeft)}px`);
         }
         syncMobileViewportHeight();
         window.addEventListener('resize', syncMobileViewportHeight, { passive: true });
         if (mobileViewportQuery.addEventListener) mobileViewportQuery.addEventListener('change', syncMobileViewportHeight);
         if (window.visualViewport) {
-            window.visualViewport.addEventListener('resize', () => {
+            const handleVisualViewportChange = () => {
                 syncMobileViewportHeight();
                 if (mobileViewportQuery.matches && isUserAtBottom && !isMinimized) {
                     requestAnimationFrame(() => {
                         if (isUserAtBottom) chatWindow.scrollTop = chatWindow.scrollHeight;
                     });
                 }
-            });
+            };
+            window.visualViewport.addEventListener('resize', handleVisualViewportChange, { passive: true });
+            window.visualViewport.addEventListener('scroll', handleVisualViewportChange, { passive: true });
         }
         function clearUnreadState() {
             unreadCount = 0; document.getElementById('new-msg-notification').style.display = 'none';
@@ -899,11 +997,11 @@
             searchInput.value = '';
             searchTerm = '';
             searchResults = [];
-            searchIndex = -1;
             searchContextActive = false;
             searchRestoreAnchor = null;
             searchRestoreWasBottom = true;
-            updateSearchNav();
+            closeSearchPanel();
+            clearSearchHighlights();
             const conversation = getConversation(context);
             syncActiveHistory();
             currentReply = null;
@@ -971,7 +1069,7 @@
             const list = document.getElementById('dm-list');
             list.innerHTML = '';
             state.dmContacts.forEach(contactName => {
-                let u = Object.values(state.users).find(user => user.username === contactName);
+                let u = findKnownUser(contactName);
                 if (!u) {
                     const cached = allCachedMessages();
                     const msg = cached.slice().reverse().find(m => m.user === contactName);
@@ -1039,7 +1137,7 @@
         }
 
         window.openProfileByUsername = function(username) { socket.emit('getUserProfile', username); }
-        socket.on('userProfileData', (user) => { if(user) openProfile(user); else alert("User data not found."); });
+        socket.on('userProfileData', (user) => { if(user) { cacheProfile(user); updateDMList(); refreshVisibleAvatars(); openProfile(user); } else alert("User data not found."); });
 
         function parseMessageText(text) {
             if (!text) return '';
@@ -1336,7 +1434,6 @@
                 }
             }
 
-            if (searchTerm) applySearchFilter();
             if (!prepend && (isUserAtBottom || isSelf) && !isMinimized) chatWindow.scrollTop = chatWindow.scrollHeight;
         }
 
@@ -1395,7 +1492,7 @@
             const updates = { status: document.getElementById('edit-status').value, location: document.getElementById('edit-location').value, bio: document.getElementById('edit-bio').value, color: document.getElementById('color-input').value, bgImage: document.getElementById('edit-bg').value, font: document.getElementById('edit-font').value, textColor: document.getElementById('edit-text-color').value, customCss: document.getElementById('edit-css').value };
             const pfpFile = document.getElementById('edit-pfp-input').files[0];
             if (pfpPendingReset) updates.pfp = ''; 
-            const finish = (final) => { state.currentUser = { ...state.currentUser, ...final }; setBackgroundAvatar(document.getElementById('header-pfp-btn'), state.currentUser); document.documentElement.style.setProperty('--user-color', state.currentUser.color || '#007AFF'); socket.emit('updateProfile', final); pfpPendingReset = false; closeProfile(); };
+            const finish = (final) => { state.currentUser = { ...state.currentUser, ...final }; cacheProfile(state.currentUser); setBackgroundAvatar(document.getElementById('header-pfp-btn'), state.currentUser); document.documentElement.style.setProperty('--user-color', state.currentUser.color || '#007AFF'); socket.emit('updateProfile', final); pfpPendingReset = false; closeProfile(); };
             if (pfpFile) { const r = new FileReader(); r.onload = (e) => { updates.pfp = e.target.result; finish(updates); }; r.readAsDataURL(pfpFile); } else finish(updates);
         };
         modal.addEventListener('click', (e) => { if(e.target === modal) closeProfile(); });
@@ -1406,9 +1503,12 @@
                 if(data.user && data.contacts) {
                     state.currentUser = data.user;
                     state.dmContacts = new Set(data.contacts);
+                    cacheProfiles(data.contactProfiles || {});
                 } else {
                     state.currentUser = data;
                 }
+                cacheProfile(state.currentUser);
+                updateDMList();
                 
                 setBackgroundAvatar(document.getElementById('header-pfp-btn'), state.currentUser); 
                 document.documentElement.style.setProperty('--user-color', state.currentUser.color); 
@@ -1483,11 +1583,12 @@
 
             socket.on('contextHistory', ({ context = 'public', messages, targetId, searchRequestId = null, searchJumpId = null }) => {
                 if (context !== state.chatContext) return;
-                if (searchRequestId !== null && (searchRequestId !== searchRequestSeq || searchJumpId !== searchJumpSeq || !searchTerm)) return;
+                const isSearchJump = searchRequestId !== null;
+                if (isSearchJump && (searchRequestId !== searchRequestSeq || searchJumpId !== searchJumpSeq || !searchTerm)) return;
                 const contextMessages = Array.isArray(messages) ? messages : [];
                 const conversation = getConversation(context);
 
-                if (searchTerm) {
+                if (isSearchJump) {
                     searchContextActive = true;
                     renderHistory(contextMessages, state.currentUser.username, { scrollBottom: false });
                 } else {
@@ -1501,29 +1602,28 @@
                 }
 
                 setTimeout(() => {
-                    applySearchFilter();
+                    clearSearchHighlights();
                     const target = document.getElementById(targetId);
                     if (target) {
-                        target.style.display = '';
-                        const group = target.closest('.msg-group');
-                        if (group) group.style.display = 'flex';
-                        target.classList.add('search-match', 'search-current');
+                        target.classList.add('search-current');
                         target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        setTimeout(() => target.classList.remove('search-current'), 1250);
+                        setTimeout(() => target.classList.remove('search-current'), 1400);
                     }
-                }, 150);
+                }, 120);
             });
 
             socket.on('searchResults', ({ context = 'public', term = '', results = [], requestId = null } = {}) => {
                 if (context !== state.chatContext || requestId !== searchRequestSeq) return;
                 if (term.trim().toLowerCase() !== searchTerm) return;
                 searchResults = (Array.isArray(results) ? results : []).filter(isSearchableMessage);
-                searchIndex = -1;
-                updateSearchNav();
+                const shouldOpenResults = document.activeElement === searchInput || searchPanel.classList.contains('open');
+                renderSearchResults();
+                if (shouldOpenResults) openSearchPanel();
             });
 
             socket.on('updateUsers', (users) => {
                 state.users = users || {};
+                cacheProfiles(Object.values(state.users));
                 updateUserSpheres(state.users);
                 updateDMList();
                 refreshVisibleAvatars();
@@ -1556,12 +1656,12 @@
             socket.on('updateUserStatus', (status) => {});
         }
 
-        const canvas = document.querySelector('#bg-canvas'); const scene = new THREE.Scene(); scene.fog = new THREE.FogExp2(0xa8c0ff, 0.008); scene.background = new THREE.Color(0x87CEEB); const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 1000); const cameraOriginalPos = new THREE.Vector3(0, 15, 60); let cameraTargetPos = new THREE.Vector3(0, 15, 60); let cameraLookAtTarget = new THREE.Vector3(0, 0, 0); let currentLookAt = new THREE.Vector3(0, 0, 0); camera.position.copy(cameraOriginalPos); const renderer = new THREE.WebGLRenderer({ canvas, antialias: true }); renderer.setSize(window.innerWidth, window.innerHeight); const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); scene.add(ambientLight); const dirLight = new THREE.DirectionalLight(0xffd700, 1.0); dirLight.position.set(50, 100, 50); scene.add(dirLight); 
+        const canvas = document.querySelector('#bg-canvas'); const scene = new THREE.Scene(); scene.fog = new THREE.FogExp2(0xa8c0ff, 0.008); scene.background = new THREE.Color(0x87CEEB); const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 1000); const cameraOriginalPos = new THREE.Vector3(0, 15, 60); let cameraTargetPos = new THREE.Vector3(0, 15, 60); let cameraLookAtTarget = new THREE.Vector3(0, 0, 0); let currentLookAt = new THREE.Vector3(0, 0, 0); camera.position.copy(cameraOriginalPos); const renderer = new THREE.WebGLRenderer({ canvas, antialias: true }); renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); scene.add(ambientLight); const dirLight = new THREE.DirectionalLight(0xffd700, 1.0); dirLight.position.set(50, 100, 50); scene.add(dirLight); 
         const geo = new THREE.PlaneGeometry(400, 400, 60, 60); const pos = geo.attributes.position; for(let i=0; i<pos.count; i++){ const x = pos.getX(i); const y = pos.getY(i); pos.setZ(i, Math.sin(x/20)*8 + Math.cos(y/20)*8); } geo.computeVertexNormals(); const terrainMat = new THREE.MeshStandardMaterial({ color: 0x4a7c20, roughness: 0.8, side: THREE.DoubleSide }); const terrain = new THREE.Mesh(geo, terrainMat); terrain.rotation.x = -Math.PI/2; terrain.position.y = -20; scene.add(terrain); const cloudsGroup = new THREE.Group(); scene.add(cloudsGroup); const userMeshes = {}; const raycaster = new THREE.Raycaster(); const pointer = new THREE.Vector2(); const tooltip = document.getElementById('tooltip');
         window.addEventListener('pointerdown', (event) => { if (event.target.closest('#chat-ui') || event.target.closest('#login-overlay') || event.target.closest('#profile-modal') || event.target.closest('#top-controls') || event.target.closest('.side-panel.open')) return; pointer.x = (event.clientX / window.innerWidth) * 2 - 1; pointer.y = - (event.clientY / window.innerHeight) * 2 + 1; raycaster.setFromCamera(pointer, camera); const intersects = raycaster.intersectObjects(Object.values(userMeshes).map(g => g.children[0])); if (intersects.length > 0) { const mesh = intersects[0].object; const group = mesh.parent; const username = group.userData.username; if (event.button === 2) { } else { openProfileByUsername(username); const offset = new THREE.Vector3(0, 0, 15); cameraTargetPos.copy(group.position).add(offset); cameraLookAtTarget.copy(group.position); } } });
         window.addEventListener('focus', () => socket.emit('userFocus', true)); window.addEventListener('blur', () => socket.emit('userFocus', false)); window.addEventListener('mousemove', (event) => { pointer.x = (event.clientX / window.innerWidth) * 2 - 1; pointer.y = - (event.clientY / window.innerHeight) * 2 + 1; tooltip.style.left = (event.clientX + 15) + 'px'; tooltip.style.top = (event.clientY + 15) + 'px'; });
         function createClouds(count) { while(cloudsGroup.children.length > 0) cloudsGroup.remove(cloudsGroup.children[0]); const cloudGeo = new THREE.SphereGeometry(6, 8, 8); const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 }); for(let i=0; i<count; i++) { const cloud = new THREE.Mesh(cloudGeo, cloudMat); cloud.position.set((Math.random()*200)-100, 30+Math.random()*20, (Math.random()*100)-80); cloud.scale.set(1+Math.random(), 0.5+Math.random()*0.5, 1); cloudsGroup.add(cloud); } } createClouds(5);
-        function updateSceneWeather(weather) { if (!weather) return; const code = weather.weathercode; const isDayTime = weather.is_day === 1; let skyColor, fogColor, lightIntensity, grassColor; if (isDayTime) { skyColor = 0x87CEEB; fogColor = 0xa8c0ff; lightIntensity = 1.0; grassColor = 0x4a7c20; } else { skyColor = 0x050510; fogColor = 0x101020; lightIntensity = 0.2; grassColor = 0x1a2b0a; } let cloudCount = 5; if (code >= 1 && code <= 3) { cloudCount = 15; } else if (code >= 51) { skyColor = isDayTime ? 0x556677 : 0x050505; fogColor = isDayTime ? 0x667788 : 0x0a0a0a; cloudCount = 30; lightIntensity *= 0.5; } scene.background = new THREE.Color(skyColor); scene.fog = new THREE.FogExp2(fogColor, 0.008); dirLight.intensity = lightIntensity; terrainMat.color.setHex(grassColor); createClouds(cloudCount); document.getElementById('temp-display').innerText = `${weather.temperature}°C`; }
+        function updateSceneWeather(weather) { if (!weather) return; const code = weather.weathercode; const isDayTime = weather.is_day === 1; let skyColor, fogColor, lightIntensity, grassColor; if (isDayTime) { skyColor = 0x87CEEB; fogColor = 0xa8c0ff; lightIntensity = 1.0; grassColor = 0x4a7c20; } else { skyColor = 0x050510; fogColor = 0x101020; lightIntensity = 0.2; grassColor = 0x1a2b0a; } let cloudCount = 5; if (code >= 1 && code <= 3) { cloudCount = 15; } else if (code >= 51) { skyColor = isDayTime ? 0x556677 : 0x050505; fogColor = isDayTime ? 0x667788 : 0x0a0a0a; cloudCount = 30; lightIntensity *= 0.5; } scene.background = new THREE.Color(skyColor); document.documentElement.style.setProperty('--scene-bg', `#${skyColor.toString(16).padStart(6, '0')}`); scene.fog = new THREE.FogExp2(fogColor, 0.008); dirLight.intensity = lightIntensity; terrainMat.color.setHex(grassColor); createClouds(cloudCount); document.getElementById('temp-display').innerText = `${weather.temperature}°C`; }
         getUserLocation().then(coords => fetchWeatherData(coords.latitude, coords.longitude)).then(weather => updateSceneWeather(weather)).catch(err => { console.log("Using default weather (Location denied or error)", err); updateSceneWeather({ is_day: 1, weathercode: 0, temperature: 20 }); });
         function updateUserSpheres(users) { Object.keys(users).forEach(id => { const u = users[id]; let group = userMeshes[id]; if (!group) { group = new THREE.Group(); const mesh = new THREE.Mesh(new THREE.SphereGeometry(2, 32, 32), new THREE.MeshStandardMaterial({ color: u.color, emissive: u.color, emissiveIntensity: 0.5 })); mesh.userData.isInteractable = true; group.add(mesh); group.position.set(u.x, u.y, u.z); group.userData = { username: u.username }; scene.add(group); userMeshes[id] = group; } else { const mesh = group.children[0]; mesh.material.color.set(u.color); mesh.material.emissive.set(u.color); group.position.set(u.x, u.y, u.z); } }); Object.keys(userMeshes).forEach(id => { if (!users[id]) { scene.remove(userMeshes[id]); delete userMeshes[id]; } }); }
         function animate() { requestAnimationFrame(animate); camera.position.lerp(cameraTargetPos, 0.05); currentLookAt.lerp(cameraLookAtTarget, 0.05); camera.lookAt(currentLookAt); terrain.position.z = (Math.sin(Date.now() * 0.0001) * 10) - 10; Object.values(userMeshes).forEach((group, i) => { group.position.y += Math.sin(Date.now() * 0.002 + i) * 0.05; }); raycaster.setFromCamera(pointer, camera); const targets = []; scene.traverse(c => { if(c.userData.isInteractable) targets.push(c); }); const intersects = raycaster.intersectObjects(targets); if (intersects.length > 0) { const targetGroup = intersects[0].object.parent; tooltip.innerText = targetGroup.userData.username; tooltip.style.display = 'block'; document.body.style.cursor = 'pointer'; } else { tooltip.style.display = 'none'; document.body.style.cursor = 'default'; } renderer.render(scene, camera); cloudsGroup.rotation.y += 0.0002; } animate();
@@ -1603,7 +1703,21 @@
         document.getElementById('chat-form').addEventListener('submit', (e) => { e.preventDefault(); const text = msgInput.value.trim(); if((text || pendingFiles.length > 0) && socket) { const toUser = state.chatContext === 'public' ? null : state.chatContext; socket.emit('chatMessage', { text, toUser, files: pendingFiles, replyTo: currentReply }); msgInput.value = ''; clearTimeout(typingTimer); stopTyping(); pendingFiles = []; currentReply = null; updateContextBar(); } });
         document.getElementById('upload-btn').addEventListener('click', () => { document.getElementById('file-input').click(); });
         document.getElementById('file-input').addEventListener('change', function() { const files = Array.from(this.files); if(files.length === 0) return; files.forEach(file => { const reader = new FileReader(); reader.onload = (e) => { pendingFiles.push({ name: file.name, type: file.type, data: e.target.result }); updateContextBar(); }; reader.readAsDataURL(file); }); this.value = ''; });
-        window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+        function resizeSceneRenderer() {
+            const width = Math.max(1, Math.ceil(document.documentElement.clientWidth || window.innerWidth));
+            const height = Math.max(1, Math.ceil(document.documentElement.clientHeight || window.innerHeight));
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+            renderer.setSize(width, height, false);
+        }
+        resizeSceneRenderer();
+        window.addEventListener('resize', resizeSceneRenderer, { passive: true });
+        window.addEventListener('orientationchange', () => setTimeout(resizeSceneRenderer, 60), { passive: true });
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', resizeSceneRenderer, { passive: true });
+            window.visualViewport.addEventListener('scroll', resizeSceneRenderer, { passive: true });
+        }
         const ctxMenu = document.getElementById('context-menu'); let selectedMsgData = null;
         function showContextAt(x, y, data) {
             selectedMsgData = data;

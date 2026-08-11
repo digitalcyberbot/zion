@@ -132,6 +132,35 @@ async function hydrateMessageProfiles(messages) {
     });
 }
 
+async function getProfileSummaries(usernames) {
+    const uniqueNames = [...new Set((Array.isArray(usernames) ? usernames : []).filter(Boolean))];
+    if (uniqueNames.length === 0) return {};
+
+    const summaries = {};
+    if (isDbConnected) {
+        const records = await User.find({ username: { $in: uniqueNames } }).select('username pfp color').lean();
+        records.forEach(record => {
+            summaries[record.username] = {
+                username: record.username,
+                pfp: record.pfp || '',
+                color: record.color || '#007AFF'
+            };
+        });
+    } else {
+        uniqueNames.forEach(username => {
+            const user = localUsers[username];
+            if (user) {
+                summaries[username] = {
+                    username,
+                    pfp: user.pfp || '',
+                    color: user.color || '#007AFF'
+                };
+            }
+        });
+    }
+    return summaries;
+}
+
 function emitPinnedUpdates() {
     for (const [socketId, user] of Object.entries(activeUsers)) {
         io.to(socketId).emit('updatePinned', visiblePinsFor(user.username));
@@ -257,7 +286,8 @@ io.on('connection', (socket) => {
                 dmContacts = [...new Set([...sent, ...received])];
             }
 
-            socket.emit('loginSuccess', { user: activeUsers[socket.id], contacts: dmContacts });
+            const contactProfiles = await getProfileSummaries(dmContacts);
+            socket.emit('loginSuccess', { user: activeUsers[socket.id], contacts: dmContacts, contactProfiles });
             socket.emit('updatePinned', visiblePinsFor(userData.username));
             io.emit('updateUsers', activeUsers);
 
@@ -379,8 +409,8 @@ io.on('connection', (socket) => {
                 const query = {
                     $and: [
                         contextQuery,
-                        { type: { $ne: 'bot' } },
-                        { user: { $ne: 'System' } },
+                        { type: { $nin: ['bot', 'system', 'notification'] } },
+                        { user: { $nin: ['System', 'Notification'] } },
                         { text: regex }
                     ]
                 };
@@ -389,16 +419,18 @@ io.on('connection', (socket) => {
                     .limit(100)
                     .select('_id user toUser text timestamp type')
                     .lean();
-                results = rows.reverse();
+                results = await hydrateMessageProfiles(rows);
             } else {
                 const lower = cleanTerm.toLowerCase();
-                results = chatHistory.filter(message =>
-                    messageMatchesContext(message, context, currentUser.username) &&
-                    message.type !== 'bot' &&
-                    message.user !== 'System' &&
-                    typeof message.text === 'string' &&
-                    message.text.toLowerCase().includes(lower)
-                ).slice(-100);
+                const rows = chatHistory.filter(message => {
+                    const type = String(message.type || 'user').toLowerCase();
+                    return messageMatchesContext(message, context, currentUser.username) &&
+                        !['bot', 'system', 'notification'].includes(type) &&
+                        !['System', 'Notification'].includes(message.user) &&
+                        typeof message.text === 'string' &&
+                        message.text.toLowerCase().includes(lower);
+                }).slice(-100).reverse();
+                results = await hydrateMessageProfiles(rows);
             }
 
             socket.emit('searchResults', { context, term: cleanTerm, results, requestId });
