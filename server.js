@@ -30,7 +30,7 @@ const MUSIC_CATALOG = {
             title: 'Neon Drift',
             artist: 'Zion Radio',
             cover: '/music/neon-drift.png',
-            price: 0,
+            price: 80,
             tracks: ['afterglow', 'night-drive', 'soft-static']
         },
         {
@@ -38,17 +38,17 @@ const MUSIC_CATALOG = {
             title: 'Glass Orbit',
             artist: 'Zion Radio',
             cover: '/music/glass-orbit.png',
-            price: 0,
+            price: 90,
             tracks: ['blue-hour', 'low-gravity', 'signal-bloom']
         }
     ],
     tracks: [
-        { id: 'afterglow', title: 'Afterglow', artist: 'Zion Radio', albumId: 'neon-drift', cover: '/music/neon-drift.png', audio: '/music/afterglow.wav', price: 0, duration: '0:16' },
-        { id: 'night-drive', title: 'Night Drive', artist: 'Zion Radio', albumId: 'neon-drift', cover: '/music/neon-drift.png', audio: '/music/night-drive.wav', price: 0, duration: '0:16' },
-        { id: 'soft-static', title: 'Soft Static', artist: 'Zion Radio', albumId: 'neon-drift', cover: '/music/neon-drift.png', audio: '/music/soft-static.wav', price: 0, duration: '0:16' },
-        { id: 'blue-hour', title: 'Blue Hour', artist: 'Zion Radio', albumId: 'glass-orbit', cover: '/music/glass-orbit.png', audio: '/music/blue-hour.wav', price: 0, duration: '0:16' },
-        { id: 'low-gravity', title: 'Low Gravity', artist: 'Zion Radio', albumId: 'glass-orbit', cover: '/music/glass-orbit.png', audio: '/music/low-gravity.wav', price: 0, duration: '0:16' },
-        { id: 'signal-bloom', title: 'Signal Bloom', artist: 'Zion Radio', albumId: 'glass-orbit', cover: '/music/glass-orbit.png', audio: '/music/signal-bloom.wav', price: 0, duration: '0:16' }
+        { id: 'afterglow', title: 'Afterglow', artist: 'Zion Radio', albumId: 'neon-drift', cover: '/music/neon-drift.png', audio: '/music/afterglow.wav', price: 30, duration: '0:16' },
+        { id: 'night-drive', title: 'Night Drive', artist: 'Zion Radio', albumId: 'neon-drift', cover: '/music/neon-drift.png', audio: '/music/night-drive.wav', price: 30, duration: '0:16' },
+        { id: 'soft-static', title: 'Soft Static', artist: 'Zion Radio', albumId: 'neon-drift', cover: '/music/neon-drift.png', audio: '/music/soft-static.wav', price: 30, duration: '0:16' },
+        { id: 'blue-hour', title: 'Blue Hour', artist: 'Zion Radio', albumId: 'glass-orbit', cover: '/music/glass-orbit.png', audio: '/music/blue-hour.wav', price: 35, duration: '0:16' },
+        { id: 'low-gravity', title: 'Low Gravity', artist: 'Zion Radio', albumId: 'glass-orbit', cover: '/music/glass-orbit.png', audio: '/music/low-gravity.wav', price: 35, duration: '0:16' },
+        { id: 'signal-bloom', title: 'Signal Bloom', artist: 'Zion Radio', albumId: 'glass-orbit', cover: '/music/glass-orbit.png', audio: '/music/signal-bloom.wav', price: 35, duration: '0:16' }
     ]
 };
 
