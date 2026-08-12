@@ -23,6 +23,38 @@ try {
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
+const MUSIC_CATALOG = {
+    albums: [
+        {
+            id: 'neon-drift',
+            title: 'Neon Drift',
+            artist: 'Zion Radio',
+            cover: '/music/neon-drift.png',
+            price: 80,
+            tracks: ['afterglow', 'night-drive', 'soft-static']
+        },
+        {
+            id: 'glass-orbit',
+            title: 'Glass Orbit',
+            artist: 'Zion Radio',
+            cover: '/music/glass-orbit.png',
+            price: 90,
+            tracks: ['blue-hour', 'low-gravity', 'signal-bloom']
+        }
+    ],
+    tracks: [
+        { id: 'afterglow', title: 'Afterglow', artist: 'Zion Radio', albumId: 'neon-drift', cover: '/music/neon-drift.png', audio: '/music/afterglow.wav', price: 30, duration: '0:16' },
+        { id: 'night-drive', title: 'Night Drive', artist: 'Zion Radio', albumId: 'neon-drift', cover: '/music/neon-drift.png', audio: '/music/night-drive.wav', price: 30, duration: '0:16' },
+        { id: 'soft-static', title: 'Soft Static', artist: 'Zion Radio', albumId: 'neon-drift', cover: '/music/neon-drift.png', audio: '/music/soft-static.wav', price: 30, duration: '0:16' },
+        { id: 'blue-hour', title: 'Blue Hour', artist: 'Zion Radio', albumId: 'glass-orbit', cover: '/music/glass-orbit.png', audio: '/music/blue-hour.wav', price: 35, duration: '0:16' },
+        { id: 'low-gravity', title: 'Low Gravity', artist: 'Zion Radio', albumId: 'glass-orbit', cover: '/music/glass-orbit.png', audio: '/music/low-gravity.wav', price: 35, duration: '0:16' },
+        { id: 'signal-bloom', title: 'Signal Bloom', artist: 'Zion Radio', albumId: 'glass-orbit', cover: '/music/glass-orbit.png', audio: '/music/signal-bloom.wav', price: 35, duration: '0:16' }
+    ]
+};
+
+const trackById = new Map(MUSIC_CATALOG.tracks.map(track => [track.id, track]));
+const albumById = new Map(MUSIC_CATALOG.albums.map(album => [album.id, album]));
+
 const UserSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true },
     password: { type: String, required: true },
@@ -37,7 +69,10 @@ const UserSchema = new mongoose.Schema({
     customCss: { type: String, default: '' },
     x: { type: Number, default: 0 },
     y: { type: Number, default: 0 },
-    z: { type: Number, default: 0 }
+    z: { type: Number, default: 0 },
+    activityPoints: { type: Number, default: 0, min: 0 },
+    ownedTracks: { type: [String], default: [] },
+    currentTrack: { type: String, default: null }
 });
 
 const MessageSchema = new mongoose.Schema({
@@ -52,6 +87,8 @@ const MessageSchema = new mongoose.Schema({
     timestamp: { type: Date, default: Date.now },
     isPinned: { type: Boolean, default: false }
 });
+MessageSchema.index({ timestamp: -1 });
+MessageSchema.index({ user: 1, toUser: 1, timestamp: -1 });
 
 const User = mongoose.model('User', UserSchema);
 const Message = mongoose.model('Message', MessageSchema);
@@ -66,6 +103,12 @@ let activeUsers = {};
 let pinnedMessages = [];
 let chatHistory = [];
 let isDbConnected = false;
+let offlineMessageSeq = 0;
+
+const contributionState = new Map();
+const CONTRIBUTION_COOLDOWN_MS = 45 * 1000;
+const CONTRIBUTION_DAILY_CAP = 60;
+const CONTRIBUTION_DUPLICATE_WINDOW_MS = 30 * 60 * 1000;
 
 function normalizeId(value) {
     return value == null ? '' : String(value);
@@ -75,8 +118,58 @@ function isMongoId(value) {
     return /^[a-f\d]{24}$/i.test(normalizeId(value));
 }
 
-function escapeRegex(value) {
-    return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function publicUser(user) {
+    if (!user) return null;
+    return {
+        username: user.username,
+        color: user.color || '#007AFF',
+        pfp: user.pfp || '',
+        bio: user.bio || 'No bio written.',
+        location: user.location || 'Unknown',
+        status: user.status || 'Online',
+        bgImage: user.bgImage || '',
+        font: user.font || 'sans-serif',
+        textColor: user.textColor || '#ffffff',
+        customCss: user.customCss || '',
+        x: Number(user.x) || 0,
+        y: Number(user.y) || 0,
+        z: Number(user.z) || 0,
+        windowFocus: user.windowFocus !== false,
+        currentTrack: trackById.has(user.currentTrack) ? user.currentTrack : null
+    };
+}
+
+function publicUsersSnapshot() {
+    const result = {};
+    for (const [socketId, user] of Object.entries(activeUsers)) {
+        result[socketId] = publicUser(user);
+    }
+    return result;
+}
+
+function emitUsers() {
+    io.emit('updateUsers', publicUsersSnapshot());
+}
+
+function privateMusicState(user) {
+    const owned = Array.isArray(user.ownedTracks) ? [...new Set(user.ownedTracks.filter(id => trackById.has(id)))] : [];
+    return {
+        activityPoints: Math.max(0, Number(user.activityPoints) || 0),
+        ownedTracks: owned,
+        currentTrack: owned.includes(user.currentTrack) ? user.currentTrack : null
+    };
+}
+
+function syncPrivateUserState(username, updates) {
+    for (const user of Object.values(activeUsers)) {
+        if (user.username === username) Object.assign(user, updates);
+    }
+}
+
+function emitPrivateMusicState(username, extra = {}) {
+    const user = Object.values(activeUsers).find(entry => entry.username === username);
+    if (!user) return;
+    io.to(username).emit('musicState', { ...privateMusicState(user), ...extra });
 }
 
 function getContextQuery(context, currentUser) {
@@ -105,62 +198,6 @@ function visiblePinsFor(username) {
     return pinnedMessages.filter(message => canUserSeeMessage(message, username));
 }
 
-async function hydrateMessageProfiles(messages) {
-    if (!Array.isArray(messages) || messages.length === 0) return [];
-    const usernames = [...new Set(messages.map(message => message && message.user).filter(name => name && name !== 'System'))];
-    if (usernames.length === 0) return messages;
-
-    const profiles = new Map();
-    if (isDbConnected) {
-        const records = await User.find({ username: { $in: usernames } }).select('username pfp color').lean();
-        records.forEach(record => profiles.set(record.username, record));
-    } else {
-        usernames.forEach(username => {
-            const user = localUsers[username];
-            if (user) profiles.set(username, { username, pfp: user.pfp || '', color: user.color || '#007AFF' });
-        });
-    }
-
-    return messages.map(message => {
-        const profile = profiles.get(message.user);
-        if (!profile) return message;
-        return {
-            ...message,
-            userPfp: profile.pfp || '',
-            userColor: profile.color || message.userColor || '#007AFF'
-        };
-    });
-}
-
-async function getProfileSummaries(usernames) {
-    const uniqueNames = [...new Set((Array.isArray(usernames) ? usernames : []).filter(Boolean))];
-    if (uniqueNames.length === 0) return {};
-
-    const summaries = {};
-    if (isDbConnected) {
-        const records = await User.find({ username: { $in: uniqueNames } }).select('username pfp color').lean();
-        records.forEach(record => {
-            summaries[record.username] = {
-                username: record.username,
-                pfp: record.pfp || '',
-                color: record.color || '#007AFF'
-            };
-        });
-    } else {
-        uniqueNames.forEach(username => {
-            const user = localUsers[username];
-            if (user) {
-                summaries[username] = {
-                    username,
-                    pfp: user.pfp || '',
-                    color: user.color || '#007AFF'
-                };
-            }
-        });
-    }
-    return summaries;
-}
-
 function emitPinnedUpdates() {
     for (const [socketId, user] of Object.entries(activeUsers)) {
         io.to(socketId).emit('updatePinned', visiblePinsFor(user.username));
@@ -171,9 +208,128 @@ function sanitizeProfileUpdate(data) {
     if (!data || typeof data !== 'object' || Array.isArray(data)) return {};
     const clean = {};
     for (const field of PROFILE_FIELDS) {
-        if (Object.prototype.hasOwnProperty.call(data, field)) clean[field] = data[field];
+        if (!Object.prototype.hasOwnProperty.call(data, field)) continue;
+        const value = data[field];
+        if (typeof value === 'string') clean[field] = value.slice(0, field === 'customCss' ? 6000 : 2_000_000);
     }
     return clean;
+}
+
+function normalizeContributionText(text) {
+    return String(text || '')
+        .toLowerCase()
+        .replace(/https?:\/\/\S+/g, '<url>')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function dayKey() {
+    return new Date().toISOString().slice(0, 10);
+}
+
+function contributionAward(username, text, replyTo) {
+    const normalized = normalizeContributionText(text);
+    const words = normalized.match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) || [];
+    const meaningfulChars = normalized.replace(/[^\p{L}\p{N}]/gu, '').length;
+    if (meaningfulChars < 18 || words.length < 4) return 0;
+
+    const now = Date.now();
+    let state = contributionState.get(username);
+    if (!state || state.day !== dayKey()) {
+        state = { day: dayKey(), earned: 0, lastAwardAt: 0, recent: [] };
+        contributionState.set(username, state);
+    }
+
+    state.recent = state.recent.filter(item => now - item.at < CONTRIBUTION_DUPLICATE_WINDOW_MS);
+    if (state.recent.some(item => item.text === normalized)) return 0;
+    if (now - state.lastAwardAt < CONTRIBUTION_COOLDOWN_MS) return 0;
+    if (state.earned >= CONTRIBUTION_DAILY_CAP) return 0;
+
+    let points = 2;
+    if (meaningfulChars >= 60) points += 1;
+    if (meaningfulChars >= 140) points += 1;
+    if (replyTo && typeof replyTo === 'object') points += 1;
+    points = Math.min(points, 5, CONTRIBUTION_DAILY_CAP - state.earned);
+
+    state.lastAwardAt = now;
+    state.earned += points;
+    state.recent.push({ text: normalized, at: now });
+    return points;
+}
+
+async function addActivityPoints(user, amount) {
+    if (!user || amount <= 0) return;
+    user.activityPoints = Math.max(0, (Number(user.activityPoints) || 0) + amount);
+    syncPrivateUserState(user.username, { activityPoints: user.activityPoints });
+    if (isDbConnected) {
+        await User.updateOne({ username: user.username }, { $inc: { activityPoints: amount } });
+    } else if (localUsers[user.username]) {
+        localUsers[user.username].activityPoints = user.activityPoints;
+    }
+    io.to(user.username).emit('activityPointsUpdate', {
+        balance: user.activityPoints,
+        delta: amount,
+        reason: 'Meaningful contribution'
+    });
+}
+
+function offlineSortValue(message) {
+    const time = new Date(message.timestamp).getTime();
+    const seq = Number(message._offlineSeq) || 0;
+    return [time, seq];
+}
+
+function compareOfflineDesc(a, b) {
+    const av = offlineSortValue(a);
+    const bv = offlineSortValue(b);
+    return bv[0] - av[0] || bv[1] - av[1];
+}
+
+function getOfflinePage(context, username, lastTimestamp, lastMessageId, limit = 20) {
+    let items = chatHistory.filter(message => messageMatchesContext(message, context, username));
+    items.sort(compareOfflineDesc);
+    if (lastTimestamp) {
+        const cutoff = new Date(lastTimestamp).getTime();
+        const cursor = items.find(item => normalizeId(item.msgId || item._id) === normalizeId(lastMessageId));
+        const cursorSeq = cursor ? Number(cursor._offlineSeq) || 0 : Number.MAX_SAFE_INTEGER;
+        items = items.filter(item => {
+            const [time, seq] = offlineSortValue(item);
+            return time < cutoff || (time === cutoff && seq < cursorSeq);
+        });
+    }
+    const slice = items.slice(0, limit + 1);
+    return { messages: slice.slice(0, limit).reverse(), hasMore: slice.length > limit };
+}
+
+async function getDbPage(context, username, lastTimestamp, lastMessageId, limit = 20) {
+    const contextQuery = getContextQuery(context, username);
+    const and = [contextQuery];
+    if (lastTimestamp) {
+        const timestamp = new Date(lastTimestamp);
+        const cursorTerms = [{ timestamp: { $lt: timestamp } }];
+        if (isMongoId(lastMessageId)) {
+            cursorTerms.push({ timestamp, _id: { $lt: lastMessageId } });
+        }
+        and.push({ $or: cursorTerms });
+    }
+    const query = and.length === 1 ? and[0] : { $and: and };
+    const rows = await Message.find(query).sort({ timestamp: -1, _id: -1 }).limit(limit + 1).lean();
+    return { messages: rows.slice(0, limit).reverse(), hasMore: rows.length > limit };
+}
+
+async function getContactProfiles(usernames) {
+    const unique = [...new Set((usernames || []).filter(Boolean))];
+    if (!unique.length) return {};
+    const result = {};
+    if (isDbConnected) {
+        const docs = await User.find({ username: { $in: unique } }).select('-password -activityPoints -ownedTracks').lean();
+        for (const doc of docs) result[doc.username] = publicUser(doc);
+    } else {
+        for (const username of unique) {
+            if (localUsers[username]) result[username] = publicUser(localUsers[username]);
+        }
+    }
+    return result;
 }
 
 async function connectDatabase() {
@@ -182,7 +338,6 @@ async function connectDatabase() {
         console.log('⚡ Starting in OFFLINE MODE (MONGO_URI not configured)');
         return;
     }
-
     try {
         await mongoose.connect(mongoUri);
         isDbConnected = true;
@@ -203,9 +358,8 @@ app.get('/', (req, res) => {
 io.on('connection', (socket) => {
     socket.on('login', async (credentials = {}) => {
         try {
-            const username = typeof credentials.username === 'string' ? credentials.username.trim() : '';
+            const username = typeof credentials.username === 'string' ? credentials.username.trim().slice(0, 64) : '';
             const password = typeof credentials.password === 'string' ? credentials.password : '';
-
             if (!username || !password) {
                 socket.emit('loginError', 'Username and password are required');
                 return;
@@ -225,14 +379,16 @@ io.on('connection', (socket) => {
                     userData = user;
                 } else {
                     const hashed = await bcrypt.hash(password, 10);
-                    const newUser = new User({
+                    userData = await new User({
                         username,
                         password: hashed,
                         x: (Math.random() * 60) - 30,
                         y: (Math.random() * 20) + 5,
-                        z: (Math.random() * 30) - 20
-                    });
-                    userData = await newUser.save();
+                        z: (Math.random() * 30) - 20,
+                        activityPoints: 0,
+                        ownedTracks: [],
+                        currentTrack: null
+                    }).save();
                     isNewAccount = true;
                 }
             } else if (localUsers[username]) {
@@ -258,371 +414,279 @@ io.on('connection', (socket) => {
                     bgImage: '',
                     font: 'sans-serif',
                     textColor: '#ffffff',
-                    customCss: ''
+                    customCss: '',
+                    activityPoints: 0,
+                    ownedTracks: [],
+                    currentTrack: null
                 };
                 localUsers[username] = userData;
                 isNewAccount = true;
             }
 
-            const previousUser = activeUsers[socket.id];
-            if (previousUser && previousUser.username !== userData.username) {
-                socket.leave(previousUser.username);
-            }
+            const previous = activeUsers[socket.id];
+            if (previous && previous.username !== username) socket.leave(previous.username);
+            const wasAlreadyOnline = Object.entries(activeUsers).some(([id, user]) => id !== socket.id && user.username === username);
+            socket.join(username);
 
-            socket.join(userData.username);
             const plainUser = userData.toObject ? userData.toObject() : userData;
+            if (!wasAlreadyOnline) {
+                plainUser.currentTrack = null;
+                if (isDbConnected) await User.updateOne({ username }, { $set: { currentTrack: null } });
+                else if (localUsers[username]) localUsers[username].currentTrack = null;
+            }
             activeUsers[socket.id] = { ...plainUser, windowFocus: true };
-            if (!activeUsers[socket.id].color) activeUsers[socket.id].color = '#007AFF';
             delete activeUsers[socket.id].password;
+            if (!Array.isArray(activeUsers[socket.id].ownedTracks)) activeUsers[socket.id].ownedTracks = [];
+            if (!trackById.has(activeUsers[socket.id].currentTrack)) activeUsers[socket.id].currentTrack = null;
 
             let dmContacts = [];
             if (isDbConnected) {
-                const sent = await Message.distinct('toUser', { user: userData.username, toUser: { $ne: null } });
-                const received = await Message.distinct('user', { toUser: userData.username });
+                const sent = await Message.distinct('toUser', { user: username, toUser: { $ne: null } });
+                const received = await Message.distinct('user', { toUser: username });
                 dmContacts = [...new Set([...sent, ...received])];
             } else {
-                const sent = chatHistory.filter(m => m.user === userData.username && m.toUser).map(m => m.toUser);
-                const received = chatHistory.filter(m => m.toUser === userData.username).map(m => m.user);
+                const sent = chatHistory.filter(m => m.user === username && m.toUser).map(m => m.toUser);
+                const received = chatHistory.filter(m => m.toUser === username).map(m => m.user);
                 dmContacts = [...new Set([...sent, ...received])];
             }
+            const contactProfiles = await getContactProfiles(dmContacts);
 
-            const contactProfiles = await getProfileSummaries(dmContacts);
-            socket.emit('loginSuccess', { user: activeUsers[socket.id], contacts: dmContacts, contactProfiles });
-            socket.emit('updatePinned', visiblePinsFor(userData.username));
-            io.emit('updateUsers', activeUsers);
+            socket.emit('loginSuccess', {
+                user: publicUser(activeUsers[socket.id]),
+                contacts: dmContacts,
+                contactProfiles
+            });
+            socket.emit('musicCatalog', MUSIC_CATALOG);
+            socket.emit('musicState', privateMusicState(activeUsers[socket.id]));
+            socket.emit('updatePinned', visiblePinsFor(username));
+            emitUsers();
 
-            if (isDbConnected) {
-                try {
-                    const page = await Message.find({ toUser: null }).sort({ timestamp: -1, _id: -1 }).limit(21).lean();
-                    const hasMore = page.length > 20;
-                    const history = await hydrateMessageProfiles(page.slice(0, 20).reverse());
-                    socket.emit('history', { messages: history, hasMore });
-                } catch (e) {
-                    console.error(e);
-                }
-            } else {
-                const publicMessages = chatHistory.filter(m => !m.toUser);
-                const publicHistory = await hydrateMessageProfiles(publicMessages.slice(-20));
-                socket.emit('history', { messages: publicHistory, hasMore: publicMessages.length > 20 });
-            }
+            const page = isDbConnected
+                ? await getDbPage('public', username, null, null)
+                : getOfflinePage('public', username, null, null);
+            socket.emit('history', page);
 
             if (isNewAccount) {
                 const sysMsgData = {
                     user: 'System',
-                    text: `${userData.username} has registered a new account`,
+                    text: `${username} has registered a new account`,
                     type: 'bot',
                     timestamp: Date.now(),
                     toUser: null
                 };
-
-                let emitData = { ...sysMsgData, msgId: Date.now() + Math.random() };
+                let emitData = { ...sysMsgData, msgId: `offline-${++offlineMessageSeq}`, _offlineSeq: offlineMessageSeq };
                 if (isDbConnected) {
                     const saved = await new Message(sysMsgData).save();
                     emitData = { ...sysMsgData, msgId: saved._id };
                 } else {
                     chatHistory.push(emitData);
-                    if (chatHistory.length > 50) chatHistory.shift();
                 }
                 io.emit('chatMessage', emitData);
             }
-        } catch (e) {
-            console.error(e);
+        } catch (error) {
+            console.error(error);
             socket.emit('loginError', 'Server error');
         }
     });
 
-    socket.on('loadMoreMessages', async ({ context = 'public', lastTimestamp, lastMessageId = null, requestId = null } = {}) => {
+    socket.on('loadMoreMessages', async ({ context = 'public', lastTimestamp = null, lastMessageId = null, requestId = null } = {}) => {
         const currentUser = activeUsers[socket.id];
         if (!currentUser) return;
-
         try {
-            let moreMessages = [];
-            let hasMore = false;
-            if (isDbConnected) {
-                const contextQuery = getContextQuery(context, currentUser.username);
-                let query = contextQuery;
-                if (lastTimestamp) {
-                    const cutoff = new Date(lastTimestamp);
-                    if (isMongoId(lastMessageId)) {
-                        query = {
-                            $and: [
-                                contextQuery,
-                                {
-                                    $or: [
-                                        { timestamp: { $lt: cutoff } },
-                                        { timestamp: cutoff, _id: { $lt: new mongoose.Types.ObjectId(lastMessageId) } }
-                                    ]
-                                }
-                            ]
-                        };
-                    } else {
-                        query = { $and: [contextQuery, { timestamp: { $lt: cutoff } }] };
-                    }
-                }
-                const page = await Message.find(query).sort({ timestamp: -1, _id: -1 }).limit(21).lean();
-                hasMore = page.length > 20;
-                moreMessages = page.slice(0, 20).reverse();
-            } else {
-                const contextMessages = chatHistory.filter(message =>
-                    messageMatchesContext(message, context, currentUser.username)
-                );
-                let olderMessages = contextMessages;
-                if (lastMessageId) {
-                    const cursorIndex = contextMessages.findIndex(message =>
-                        normalizeId(message.msgId || message._id) === normalizeId(lastMessageId)
-                    );
-                    if (cursorIndex >= 0) olderMessages = contextMessages.slice(0, cursorIndex);
-                    else if (lastTimestamp) {
-                        const cutoff = new Date(lastTimestamp).getTime();
-                        olderMessages = contextMessages.filter(message => new Date(message.timestamp).getTime() < cutoff);
-                    }
-                } else if (lastTimestamp) {
-                    const cutoff = new Date(lastTimestamp).getTime();
-                    olderMessages = contextMessages.filter(message => new Date(message.timestamp).getTime() < cutoff);
-                }
-                hasMore = olderMessages.length > 20;
-                moreMessages = olderMessages.slice(-20);
-            }
-            moreMessages = await hydrateMessageProfiles(moreMessages);
-            socket.emit('moreHistory', { context, messages: moreMessages, hasMore, requestId });
-        } catch (e) {
-            console.error(e);
-            socket.emit('moreHistory', { context, messages: [], hasMore: false, requestId });
-        }
-    });
-
-    socket.on('searchMessages', async ({ context = 'public', term = '', requestId = null } = {}) => {
-        const currentUser = activeUsers[socket.id];
-        if (!currentUser) return;
-
-        const cleanTerm = typeof term === 'string' ? term.trim().slice(0, 100) : '';
-        if (!cleanTerm) {
-            socket.emit('searchResults', { context, term: '', results: [], requestId });
-            return;
-        }
-
-        try {
-            let results = [];
-            if (isDbConnected) {
-                const contextQuery = getContextQuery(context, currentUser.username);
-                const regex = new RegExp(escapeRegex(cleanTerm), 'i');
-                const query = {
-                    $and: [
-                        contextQuery,
-                        { type: { $nin: ['bot', 'system', 'notification'] } },
-                        { user: { $nin: ['System', 'Notification'] } },
-                        { text: regex }
-                    ]
-                };
-                const rows = await Message.find(query)
-                    .sort({ timestamp: -1, _id: -1 })
-                    .limit(100)
-                    .select('_id user toUser text timestamp type')
-                    .lean();
-                results = await hydrateMessageProfiles(rows);
-            } else {
-                const lower = cleanTerm.toLowerCase();
-                const rows = chatHistory.filter(message => {
-                    const type = String(message.type || 'user').toLowerCase();
-                    return messageMatchesContext(message, context, currentUser.username) &&
-                        !['bot', 'system', 'notification'].includes(type) &&
-                        !['System', 'Notification'].includes(message.user) &&
-                        typeof message.text === 'string' &&
-                        message.text.toLowerCase().includes(lower);
-                }).slice(-100).reverse();
-                results = await hydrateMessageProfiles(rows);
-            }
-
-            socket.emit('searchResults', { context, term: cleanTerm, results, requestId });
-        } catch (e) {
-            console.error(e);
-            socket.emit('searchResults', { context, term: cleanTerm, results: [], requestId });
+            const page = isDbConnected
+                ? await getDbPage(context, currentUser.username, lastTimestamp, lastMessageId)
+                : getOfflinePage(context, currentUser.username, lastTimestamp, lastMessageId);
+            socket.emit('moreHistory', { context, requestId, ...page });
+        } catch (error) {
+            console.error(error);
+            socket.emit('moreHistory', { context, requestId, messages: [], hasMore: false });
         }
     });
 
     socket.on('loadContext', async ({ context = 'public', msgId, searchRequestId = null, searchJumpId = null } = {}) => {
         const currentUser = activeUsers[socket.id];
         if (!currentUser || !msgId) return;
-
         try {
-            if (isDbConnected) {
-                const query = getContextQuery(context, currentUser.username);
-                const targetMsg = await Message.findOne({ ...query, _id: msgId }).lean();
+            let messages = [];
+            if (isDbConnected && isMongoId(msgId)) {
+                const contextQuery = getContextQuery(context, currentUser.username);
+                const targetMsg = await Message.findOne({ $and: [contextQuery, { _id: msgId }] }).lean();
                 if (!targetMsg) return;
-
-                const before = await Message.find({ ...query, timestamp: { $lt: targetMsg.timestamp } })
-                    .sort({ timestamp: -1 }).limit(10).lean();
-                const after = await Message.find({ ...query, timestamp: { $gt: targetMsg.timestamp } })
-                    .sort({ timestamp: 1 }).limit(10).lean();
-                socket.emit('contextHistory', {
-                    context,
-                    messages: await hydrateMessageProfiles([...before.reverse(), targetMsg, ...after]),
-                    targetId: msgId,
-                    searchRequestId,
-                    searchJumpId
-                });
+                const before = await Message.find({ $and: [contextQuery, { timestamp: { $lt: targetMsg.timestamp } }] })
+                    .sort({ timestamp: -1, _id: -1 }).limit(10).lean();
+                const after = await Message.find({ $and: [contextQuery, { timestamp: { $gt: targetMsg.timestamp } }] })
+                    .sort({ timestamp: 1, _id: 1 }).limit(10).lean();
+                messages = [...before.reverse(), targetMsg, ...after];
             } else {
-                const contextMessages = chatHistory.filter(message =>
-                    messageMatchesContext(message, context, currentUser.username)
-                );
-                const targetIndex = contextMessages.findIndex(message =>
-                    normalizeId(message.msgId || message._id) === normalizeId(msgId)
-                );
-                if (targetIndex === -1) return;
-                const start = Math.max(0, targetIndex - 10);
-                const end = Math.min(contextMessages.length, targetIndex + 11);
-                socket.emit('contextHistory', {
-                    context,
-                    messages: await hydrateMessageProfiles(contextMessages.slice(start, end)),
-                    targetId: msgId,
-                    searchRequestId,
-                    searchJumpId
-                });
+                const contextMessages = chatHistory
+                    .filter(message => messageMatchesContext(message, context, currentUser.username))
+                    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+                const index = contextMessages.findIndex(message => normalizeId(message.msgId || message._id) === normalizeId(msgId));
+                if (index < 0) return;
+                messages = contextMessages.slice(Math.max(0, index - 10), index + 11);
             }
-        } catch (e) {
-            console.error(e);
+            socket.emit('contextHistory', { context, messages, targetId: msgId, searchRequestId, searchJumpId });
+        } catch (error) {
+            console.error(error);
+        }
+    });
+
+    socket.on('searchMessages', async ({ context = 'public', term = '', requestId = null } = {}) => {
+        const currentUser = activeUsers[socket.id];
+        if (!currentUser) return;
+        const cleanTerm = String(term).trim().slice(0, 100);
+        if (!cleanTerm) {
+            socket.emit('searchResults', { context, term: '', results: [], requestId });
+            return;
+        }
+        try {
+            let results = [];
+            if (isDbConnected) {
+                const escaped = cleanTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const contextQuery = getContextQuery(context, currentUser.username);
+                results = await Message.find({
+                    $and: [
+                        contextQuery,
+                        { type: 'user' },
+                        { user: { $ne: 'System' } },
+                        { text: { $regex: escaped, $options: 'i' } }
+                    ]
+                }).sort({ timestamp: -1, _id: -1 }).limit(50).lean();
+            } else {
+                const needle = cleanTerm.toLowerCase();
+                results = chatHistory
+                    .filter(message => messageMatchesContext(message, context, currentUser.username))
+                    .filter(message => message.type !== 'bot' && message.user !== 'System')
+                    .filter(message => String(message.text || '').toLowerCase().includes(needle))
+                    .sort(compareOfflineDesc)
+                    .slice(0, 50);
+            }
+            socket.emit('searchResults', { context, term: cleanTerm, results, requestId });
+        } catch (error) {
+            console.error(error);
+            socket.emit('searchResults', { context, term: cleanTerm, results: [], requestId });
         }
     });
 
     socket.on('updateProfile', async (data) => {
         const user = activeUsers[socket.id];
         if (!user) return;
-
         try {
             const updates = sanitizeProfileUpdate(data);
-            if (Object.keys(updates).length === 0) return;
-
+            if (!Object.keys(updates).length) return;
             Object.assign(user, updates);
             if (isDbConnected) {
                 await User.updateOne({ username: user.username }, { $set: updates });
             } else if (localUsers[user.username]) {
                 Object.assign(localUsers[user.username], updates);
             }
-            io.emit('updateUsers', activeUsers);
-        } catch (e) {
-            console.error('Failed to update profile:', e);
+            emitUsers();
+        } catch (error) {
+            console.error('Failed to update profile:', error);
         }
     });
 
     socket.on('getUserProfile', async (targetUsername) => {
         try {
-            if (typeof targetUsername !== 'string' || !targetUsername) {
+            const name = typeof targetUsername === 'string' ? targetUsername : '';
+            if (!name) {
                 socket.emit('userProfileData', null);
                 return;
             }
-
-            const active = Object.values(activeUsers).find(u => u.username === targetUsername);
+            const active = Object.values(activeUsers).find(user => user.username === name);
             if (active) {
-                socket.emit('userProfileData', { ...active, status: 'Online' });
+                socket.emit('userProfileData', { ...publicUser(active), status: 'Online' });
                 return;
             }
-
-            let userRecord = null;
-            if (isDbConnected) {
-                userRecord = await User.findOne({ username: targetUsername }).select('-password').lean();
-            } else if (localUsers[targetUsername]) {
-                const { password, ...safeUser } = localUsers[targetUsername];
-                userRecord = safeUser;
-            }
-
-            if (userRecord) socket.emit('userProfileData', { ...userRecord, status: 'Offline' });
-            else socket.emit('userProfileData', null);
-        } catch (e) {
+            let record = null;
+            if (isDbConnected) record = await User.findOne({ username: name }).select('-password -activityPoints -ownedTracks').lean();
+            else record = localUsers[name] || null;
+            socket.emit('userProfileData', record ? { ...publicUser(record), status: 'Offline' } : null);
+        } catch (error) {
             socket.emit('userProfileData', null);
         }
     });
 
     socket.on('userFocus', (isFocused) => {
         const user = activeUsers[socket.id];
-        if (user) {
-            user.windowFocus = Boolean(isFocused);
-            socket.broadcast.emit('updateUserStatus', {
-                username: user.username,
-                windowFocus: user.windowFocus
-            });
-        }
+        if (!user) return;
+        user.windowFocus = Boolean(isFocused);
+        socket.broadcast.emit('updateUserStatus', { username: user.username, windowFocus: user.windowFocus });
     });
 
     socket.on('chatMessage', async (data = {}) => {
         const currentUser = activeUsers[socket.id];
         if (!currentUser) return;
-
         try {
+            const text = typeof data.text === 'string' ? data.text.slice(0, 8000) : '';
+            const files = Array.isArray(data.files) ? data.files.slice(0, 8) : [];
+            const toUser = typeof data.toUser === 'string' && data.toUser && data.toUser !== currentUser.username ? data.toUser : null;
+            if (!text.trim() && files.length === 0) return;
+
             const msgData = {
                 user: currentUser.username,
-                userPfp: currentUser.pfp,
+                userPfp: currentUser.pfp || '',
                 userColor: currentUser.color || '#007AFF',
-                toUser: typeof data.toUser === 'string' && data.toUser ? data.toUser : null,
-                text: typeof data.text === 'string' && data.text ? data.text : null,
-                files: Array.isArray(data.files) ? data.files : [],
+                toUser,
+                text: text || null,
+                files,
                 replyTo: data.replyTo && typeof data.replyTo === 'object' ? data.replyTo : null,
                 type: 'user',
                 timestamp: Date.now()
             };
 
-            if (!msgData.text && msgData.files.length === 0) return;
-
-            let savedMsgId = Date.now() + Math.random();
+            let emitData;
             if (isDbConnected) {
                 const saved = await new Message(msgData).save();
-                savedMsgId = saved._id;
-            }
-
-            const emitData = { ...msgData, msgId: savedMsgId };
-            chatHistory.push(emitData);
-            if (chatHistory.length > 50) chatHistory.shift();
-
-            if (msgData.toUser) {
-                io.to(currentUser.username).to(msgData.toUser).emit('chatMessage', emitData);
+                emitData = { ...msgData, msgId: saved._id };
             } else {
-                io.emit('chatMessage', emitData);
+                const seq = ++offlineMessageSeq;
+                emitData = { ...msgData, msgId: `offline-${seq}`, _offlineSeq: seq };
+                chatHistory.push(emitData);
+                if (chatHistory.length > 1000) chatHistory.shift();
             }
-        } catch (e) {
-            console.error('Failed to send message:', e);
+
+            if (toUser) io.to(currentUser.username).to(toUser).emit('chatMessage', emitData);
+            else io.emit('chatMessage', emitData);
+
+            const reward = contributionAward(currentUser.username, text, msgData.replyTo);
+            if (reward > 0) await addActivityPoints(currentUser, reward);
+        } catch (error) {
+            console.error('Failed to send message:', error);
         }
     });
 
     socket.on('typing', ({ context = 'public' } = {}) => {
         const user = activeUsers[socket.id];
         if (!user) return;
-        const safeContext = typeof context === 'string' && context ? context : 'public';
-        const payload = { name: user.username, context: safeContext };
-        if (safeContext === 'public') socket.broadcast.emit('userTyping', payload);
-        else socket.to(safeContext).emit('userTyping', payload);
+        if (context === 'public') {
+            socket.broadcast.emit('userTyping', { name: user.username, context: 'public' });
+            return;
+        }
+        io.to(context).emit('userTyping', { name: user.username, context: user.username });
     });
 
     socket.on('stopTyping', ({ context = 'public' } = {}) => {
         const user = activeUsers[socket.id];
         if (!user) return;
-        const safeContext = typeof context === 'string' && context ? context : 'public';
-        const payload = { name: user.username, context: safeContext };
-        if (safeContext === 'public') socket.broadcast.emit('userStoppedTyping', payload);
-        else socket.to(safeContext).emit('userStoppedTyping', payload);
+        if (context === 'public') {
+            socket.broadcast.emit('userStoppedTyping', { name: user.username, context: 'public' });
+            return;
+        }
+        io.to(context).emit('userStoppedTyping', { name: user.username, context: user.username });
     });
 
     socket.on('pinMessage', async (msgData = {}) => {
         const user = activeUsers[socket.id];
         if (!user) return;
-
         const idToCheck = msgData._id || msgData.msgId;
         if (!idToCheck) return;
         const normalizedId = normalizeId(idToCheck);
-
         try {
-            const exists = pinnedMessages.some(message =>
-                normalizeId(message._id || message.msgId) === normalizedId
-            );
-            if (exists) return;
-
+            if (pinnedMessages.some(message => normalizeId(message._id || message.msgId) === normalizedId)) return;
             let canonicalMessage = null;
-            if (isDbConnected && isMongoId(normalizedId)) {
-                canonicalMessage = await Message.findById(normalizedId).lean();
-            } else {
-                canonicalMessage = chatHistory.find(message =>
-                    normalizeId(message._id || message.msgId) === normalizedId
-                );
-            }
-
+            if (isDbConnected && isMongoId(normalizedId)) canonicalMessage = await Message.findById(normalizedId).lean();
+            else canonicalMessage = chatHistory.find(message => normalizeId(message._id || message.msgId) === normalizedId);
             if (!canonicalMessage || !canUserSeeMessage(canonicalMessage, user.username)) return;
 
             const pinData = {
@@ -632,57 +696,138 @@ io.on('connection', (socket) => {
                 isPinned: true
             };
             pinnedMessages.push(pinData);
-            if (pinnedMessages.length > 50) pinnedMessages.shift();
-
+            if (pinnedMessages.length > 100) pinnedMessages.shift();
             if (isDbConnected && isMongoId(normalizedId)) {
                 await Message.updateOne({ _id: normalizedId }, { $set: { isPinned: true } });
             }
-
             emitPinnedUpdates();
 
             if (!canonicalMessage.toUser) {
-                const sysMsgData = {
+                io.emit('chatMessage', {
                     user: 'System',
                     text: `${user.username} pinned a message`,
                     type: 'bot',
                     timestamp: Date.now(),
-                    toUser: null
-                };
-                io.emit('chatMessage', { ...sysMsgData, msgId: Date.now() + Math.random() });
+                    toUser: null,
+                    msgId: `system-${Date.now()}-${Math.random()}`
+                });
             }
-        } catch (e) {
-            console.error('Failed to pin message:', e);
+        } catch (error) {
+            console.error('Failed to pin message:', error);
         }
     });
 
     socket.on('unpinMessage', async (msgId) => {
         const user = activeUsers[socket.id];
         if (!user || !msgId) return;
-
         const normalizedId = normalizeId(msgId);
-        const pinnedMessage = pinnedMessages.find(message =>
-            normalizeId(message._id || message.msgId) === normalizedId
-        );
-        if (!pinnedMessage || !canUserSeeMessage(pinnedMessage, user.username)) return;
-
+        const pinned = pinnedMessages.find(message => normalizeId(message._id || message.msgId) === normalizedId);
+        if (!pinned || !canUserSeeMessage(pinned, user.username)) return;
         try {
-            pinnedMessages = pinnedMessages.filter(message =>
-                normalizeId(message._id || message.msgId) !== normalizedId
-            );
+            pinnedMessages = pinnedMessages.filter(message => normalizeId(message._id || message.msgId) !== normalizedId);
             if (isDbConnected && isMongoId(normalizedId)) {
                 await Message.updateOne({ _id: normalizedId }, { $set: { isPinned: false } });
             }
             emitPinnedUpdates();
-        } catch (e) {
-            console.error('Failed to unpin message:', e);
+        } catch (error) {
+            console.error('Failed to unpin message:', error);
         }
     });
 
-    socket.on('disconnect', () => {
-        if (activeUsers[socket.id]) {
-            delete activeUsers[socket.id];
-            io.emit('updateUsers', activeUsers);
+    socket.on('purchaseMusic', async ({ type, id } = {}) => {
+        const user = activeUsers[socket.id];
+        if (!user) return;
+        try {
+            let trackIds = [];
+            let price = 0;
+            if (type === 'track' && trackById.has(id)) {
+                trackIds = [id];
+                price = trackById.get(id).price;
+            } else if (type === 'album' && albumById.has(id)) {
+                const album = albumById.get(id);
+                trackIds = album.tracks.filter(trackId => trackById.has(trackId));
+                price = album.price;
+            } else {
+                return;
+            }
+
+            const owned = new Set(Array.isArray(user.ownedTracks) ? user.ownedTracks : []);
+            const newTracks = trackIds.filter(trackId => !owned.has(trackId));
+            if (!newTracks.length) {
+                emitPrivateMusicState(user.username, { purchaseStatus: 'already-owned' });
+                return;
+            }
+            if ((Number(user.activityPoints) || 0) < price) {
+                emitPrivateMusicState(user.username, { purchaseStatus: 'insufficient-points' });
+                return;
+            }
+
+            user.activityPoints -= price;
+            newTracks.forEach(trackId => owned.add(trackId));
+            user.ownedTracks = [...owned];
+            syncPrivateUserState(user.username, {
+                activityPoints: user.activityPoints,
+                ownedTracks: [...user.ownedTracks]
+            });
+
+            if (isDbConnected) {
+                await User.updateOne(
+                    { username: user.username },
+                    { $set: { activityPoints: user.activityPoints, ownedTracks: user.ownedTracks } }
+                );
+            } else if (localUsers[user.username]) {
+                localUsers[user.username].activityPoints = user.activityPoints;
+                localUsers[user.username].ownedTracks = [...user.ownedTracks];
+            }
+
+            emitPrivateMusicState(user.username, {
+                purchaseStatus: 'purchased',
+                purchasedType: type,
+                purchasedId: id
+            });
+        } catch (error) {
+            console.error('Music purchase failed:', error);
         }
+    });
+
+    socket.on('playTrack', async (trackId) => {
+        const user = activeUsers[socket.id];
+        if (!user || !trackById.has(trackId)) return;
+        const owned = new Set(Array.isArray(user.ownedTracks) ? user.ownedTracks : []);
+        if (!owned.has(trackId)) return;
+        user.currentTrack = trackId;
+        syncPrivateUserState(user.username, { currentTrack: trackId });
+        if (isDbConnected) await User.updateOne({ username: user.username }, { $set: { currentTrack: trackId } });
+        else if (localUsers[user.username]) localUsers[user.username].currentTrack = trackId;
+        emitPrivateMusicState(user.username);
+        emitUsers();
+    });
+
+    socket.on('stopTrack', async () => {
+        const user = activeUsers[socket.id];
+        if (!user) return;
+        user.currentTrack = null;
+        syncPrivateUserState(user.username, { currentTrack: null });
+        if (isDbConnected) await User.updateOne({ username: user.username }, { $set: { currentTrack: null } });
+        else if (localUsers[user.username]) localUsers[user.username].currentTrack = null;
+        emitPrivateMusicState(user.username);
+        emitUsers();
+    });
+
+    socket.on('disconnect', async () => {
+        const leaving = activeUsers[socket.id];
+        if (!leaving) return;
+        delete activeUsers[socket.id];
+        const stillOnline = Object.values(activeUsers).some(user => user.username === leaving.username);
+        if (!stillOnline) {
+            try {
+                if (isDbConnected) await User.updateOne({ username: leaving.username }, { $set: { currentTrack: null } });
+                else if (localUsers[leaving.username]) localUsers[leaving.username].currentTrack = null;
+            } catch (error) {
+                console.error('Failed to clear current track on disconnect:', error);
+            }
+        }
+        emitUsers();
     });
 });
 
