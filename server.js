@@ -26,29 +26,38 @@ app.use(express.json());
 const MUSIC_CATALOG = {
     albums: [
         {
-            id: 'neon-drift',
-            title: 'Neon Drift',
-            artist: 'Zion Radio',
-            cover: '/music/neon-drift.png',
-            price: 80,
-            tracks: ['afterglow', 'night-drive', 'soft-static']
-        },
-        {
-            id: 'glass-orbit',
-            title: 'Glass Orbit',
-            artist: 'Zion Radio',
-            cover: '/music/glass-orbit.png',
-            price: 90,
-            tracks: ['blue-hour', 'low-gravity', 'signal-bloom']
+            id: 'rodzina',
+            title: 'RODZINA',
+            artist: 'Budowa',
+            cover: '/music/rodzina.png',
+            price: 240,
+            year: 2026,
+            genre: 'Kimbol',
+            tracks: [
+                'rodzina-01-piosenka-czlonkow-rodziny',
+                'rodzina-02-dom',
+                'rodzina-03-sweet-cholewa-boy',
+                'rodzina-04-wyruszaja',
+                'rodzina-05-cholewa-polewa',
+                'rodzina-06-tomasz',
+                'rodzina-07-chichot-losu',
+                'rodzina-08-to-grube',
+                'rodzina-09-ballada-mrozonskiego-mrozona',
+                'rodzina-10-bejoe'
+            ]
         }
     ],
     tracks: [
-        { id: 'afterglow', title: 'Afterglow', artist: 'Zion Radio', albumId: 'neon-drift', cover: '/music/neon-drift.png', audio: '/music/afterglow.wav', price: 30, duration: '0:16' },
-        { id: 'night-drive', title: 'Night Drive', artist: 'Zion Radio', albumId: 'neon-drift', cover: '/music/neon-drift.png', audio: '/music/night-drive.wav', price: 30, duration: '0:16' },
-        { id: 'soft-static', title: 'Soft Static', artist: 'Zion Radio', albumId: 'neon-drift', cover: '/music/neon-drift.png', audio: '/music/soft-static.wav', price: 30, duration: '0:16' },
-        { id: 'blue-hour', title: 'Blue Hour', artist: 'Zion Radio', albumId: 'glass-orbit', cover: '/music/glass-orbit.png', audio: '/music/blue-hour.wav', price: 35, duration: '0:16' },
-        { id: 'low-gravity', title: 'Low Gravity', artist: 'Zion Radio', albumId: 'glass-orbit', cover: '/music/glass-orbit.png', audio: '/music/low-gravity.wav', price: 35, duration: '0:16' },
-        { id: 'signal-bloom', title: 'Signal Bloom', artist: 'Zion Radio', albumId: 'glass-orbit', cover: '/music/glass-orbit.png', audio: '/music/signal-bloom.wav', price: 35, duration: '0:16' }
+        { id: 'rodzina-01-piosenka-czlonkow-rodziny', trackNumber: 1, title: 'Piosenka członków RODZINY', artist: 'Budowa', albumId: 'rodzina', album: 'RODZINA', cover: '/music/rodzina.png', audio: '/music/01-piosenka-czlonkow-rodziny.flac', price: 30, duration: '0:46', year: 2026, genre: 'Kimbol' },
+        { id: 'rodzina-02-dom', trackNumber: 2, title: 'Dom', artist: 'Budowa', albumId: 'rodzina', album: 'RODZINA', cover: '/music/rodzina.png', audio: '/music/02-dom.flac', price: 30, duration: '2:33', year: 2026, genre: 'Kimbol' },
+        { id: 'rodzina-03-sweet-cholewa-boy', trackNumber: 3, title: 'Sweet Cholewa boy', artist: 'Budowa', albumId: 'rodzina', album: 'RODZINA', cover: '/music/rodzina.png', audio: '/music/03-sweet-cholewa-boy.flac', price: 30, duration: '3:20', year: 2026, genre: 'Kimbol' },
+        { id: 'rodzina-04-wyruszaja', trackNumber: 4, title: 'Wyruszają', artist: 'Budowa', albumId: 'rodzina', album: 'RODZINA', cover: '/music/rodzina.png', audio: '/music/04-wyruszaja.flac', price: 30, duration: '0:39', year: 2026, genre: 'Kimbol' },
+        { id: 'rodzina-05-cholewa-polewa', trackNumber: 5, title: 'Cholewa polewa', artist: 'Budowa', albumId: 'rodzina', album: 'RODZINA', cover: '/music/rodzina.png', audio: '/music/05-cholewa-polewa.flac', price: 30, duration: '2:10', year: 2026, genre: 'Kimbol' },
+        { id: 'rodzina-06-tomasz', trackNumber: 6, title: 'Tomasz', artist: 'Budowa', albumId: 'rodzina', album: 'RODZINA', cover: '/music/rodzina.png', audio: '/music/06-tomasz.flac', price: 30, duration: '1:51', year: 2026, genre: 'Kimbol' },
+        { id: 'rodzina-07-chichot-losu', trackNumber: 7, title: 'Chichot losu', artist: 'Budowa', albumId: 'rodzina', album: 'RODZINA', cover: '/music/rodzina.png', audio: '/music/07-chichot-losu.flac', price: 30, duration: '4:10', year: 2026, genre: 'Kimbol' },
+        { id: 'rodzina-08-to-grube', trackNumber: 8, title: 'To grube', artist: 'Budowa', albumId: 'rodzina', album: 'RODZINA', cover: '/music/rodzina.png', audio: '/music/08-to-grube.flac', price: 30, duration: '0:47', year: 2026, genre: 'Kimbol' },
+        { id: 'rodzina-09-ballada-mrozonskiego-mrozona', trackNumber: 9, title: 'Ballada Mrożońskiego Mrożona', artist: 'Budowa', albumId: 'rodzina', album: 'RODZINA', cover: '/music/rodzina.png', audio: '/music/09-ballada-mrozonskiego-mrozona.flac', price: 30, duration: '3:28', year: 2026, genre: 'Kimbol' },
+        { id: 'rodzina-10-bejoe', trackNumber: 10, title: 'beJoe.', artist: 'Budowa', albumId: 'rodzina', album: 'RODZINA', cover: '/music/rodzina.png', audio: '/music/10-bejoe.flac', price: 30, duration: '5:40', year: 2026, genre: 'Kimbol' }
     ]
 };
 
