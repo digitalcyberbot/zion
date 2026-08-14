@@ -1956,7 +1956,7 @@
                 name.textContent = album.title;
                 const sub = document.createElement('div');
                 sub.className = 'music-sub';
-                sub.textContent = [album.artist, album.year, album.genre, `${album.tracks.length} tracks`].filter(Boolean).join(' · ');
+                sub.textContent = [album.artist, album.year, `${album.tracks.length} tracks`].filter(Boolean).join(' · ');
                 copy.append(name, sub);
                 const allOwned = album.tracks.every(id => owned.has(id));
                 const buy = document.createElement('button');
@@ -1985,7 +1985,7 @@
                     title.textContent = track.title;
                     const meta = document.createElement('div');
                     meta.className = 'music-track-meta';
-                    meta.textContent = `${track.trackNumber ? `#${track.trackNumber} · ` : ''}${track.duration} · ${track.price} AP`;
+                    meta.textContent = `${track.trackNumber ? `#${track.trackNumber} · ` : ''}${track.duration}`;
                     info.append(title, meta);
                     const action = document.createElement('button');
                     action.className = `music-track-action${owned.has(track.id) ? '' : ' buy'}`;
