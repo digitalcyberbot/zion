@@ -29,10 +29,9 @@ const MUSIC_CATALOG = {
             id: 'rodzina',
             title: 'RODZINA',
             artist: 'Budowa',
-            cover: '/music/rodzina.png',
-            price: 240,
+            cover: '/music/rodzina-cover.jpg',
+            price: 150,
             year: 2026,
-            genre: 'Kimbol',
             tracks: [
                 'rodzina-01-piosenka-czlonkow-rodziny',
                 'rodzina-02-dom',
@@ -48,16 +47,16 @@ const MUSIC_CATALOG = {
         }
     ],
     tracks: [
-        { id: 'rodzina-01-piosenka-czlonkow-rodziny', trackNumber: 1, title: 'Piosenka członków RODZINY', artist: 'Budowa', albumId: 'rodzina', album: 'RODZINA', cover: '/music/rodzina.png', audio: '/music/01-piosenka-czlonkow-rodziny.flac', price: 30, duration: '0:46', year: 2026, genre: 'Kimbol' },
-        { id: 'rodzina-02-dom', trackNumber: 2, title: 'Dom', artist: 'Budowa', albumId: 'rodzina', album: 'RODZINA', cover: '/music/rodzina.png', audio: '/music/02-dom.flac', price: 30, duration: '2:33', year: 2026, genre: 'Kimbol' },
-        { id: 'rodzina-03-sweet-cholewa-boy', trackNumber: 3, title: 'Sweet Cholewa boy', artist: 'Budowa', albumId: 'rodzina', album: 'RODZINA', cover: '/music/rodzina.png', audio: '/music/03-sweet-cholewa-boy.flac', price: 30, duration: '3:20', year: 2026, genre: 'Kimbol' },
-        { id: 'rodzina-04-wyruszaja', trackNumber: 4, title: 'Wyruszają', artist: 'Budowa', albumId: 'rodzina', album: 'RODZINA', cover: '/music/rodzina.png', audio: '/music/04-wyruszaja.flac', price: 30, duration: '0:39', year: 2026, genre: 'Kimbol' },
-        { id: 'rodzina-05-cholewa-polewa', trackNumber: 5, title: 'Cholewa polewa', artist: 'Budowa', albumId: 'rodzina', album: 'RODZINA', cover: '/music/rodzina.png', audio: '/music/05-cholewa-polewa.flac', price: 30, duration: '2:10', year: 2026, genre: 'Kimbol' },
-        { id: 'rodzina-06-tomasz', trackNumber: 6, title: 'Tomasz', artist: 'Budowa', albumId: 'rodzina', album: 'RODZINA', cover: '/music/rodzina.png', audio: '/music/06-tomasz.flac', price: 30, duration: '1:51', year: 2026, genre: 'Kimbol' },
-        { id: 'rodzina-07-chichot-losu', trackNumber: 7, title: 'Chichot losu', artist: 'Budowa', albumId: 'rodzina', album: 'RODZINA', cover: '/music/rodzina.png', audio: '/music/07-chichot-losu.flac', price: 30, duration: '4:10', year: 2026, genre: 'Kimbol' },
-        { id: 'rodzina-08-to-grube', trackNumber: 8, title: 'To grube', artist: 'Budowa', albumId: 'rodzina', album: 'RODZINA', cover: '/music/rodzina.png', audio: '/music/08-to-grube.flac', price: 30, duration: '0:47', year: 2026, genre: 'Kimbol' },
-        { id: 'rodzina-09-ballada-mrozonskiego-mrozona', trackNumber: 9, title: 'Ballada Mrożońskiego Mrożona', artist: 'Budowa', albumId: 'rodzina', album: 'RODZINA', cover: '/music/rodzina.png', audio: '/music/09-ballada-mrozonskiego-mrozona.flac', price: 30, duration: '3:28', year: 2026, genre: 'Kimbol' },
-        { id: 'rodzina-10-bejoe', trackNumber: 10, title: 'beJoe.', artist: 'Budowa', albumId: 'rodzina', album: 'RODZINA', cover: '/music/rodzina.png', audio: '/music/10-bejoe.flac', price: 30, duration: '5:40', year: 2026, genre: 'Kimbol' }
+        { id: 'rodzina-01-piosenka-czlonkow-rodziny', trackNumber: 1, title: 'Piosenka członków RODZINY', artist: 'Budowa', albumId: 'rodzina', album: 'RODZINA', cover: '/music/rodzina-cover.jpg', audio: '/music/01-piosenka-czlonkow-rodziny.flac', price: 30, duration: '0:46', year: 2026 },
+        { id: 'rodzina-02-dom', trackNumber: 2, title: 'Dom', artist: 'Budowa', albumId: 'rodzina', album: 'RODZINA', cover: '/music/rodzina-cover.jpg', audio: '/music/02-dom.flac', price: 30, duration: '2:33', year: 2026 },
+        { id: 'rodzina-03-sweet-cholewa-boy', trackNumber: 3, title: 'Sweet Cholewa boy', artist: 'Budowa', albumId: 'rodzina', album: 'RODZINA', cover: '/music/rodzina-cover.jpg', audio: '/music/03-sweet-cholewa-boy.flac', price: 30, duration: '3:20', year: 2026 },
+        { id: 'rodzina-04-wyruszaja', trackNumber: 4, title: 'Wyruszają', artist: 'Budowa', albumId: 'rodzina', album: 'RODZINA', cover: '/music/rodzina-cover.jpg', audio: '/music/04-wyruszaja.flac', price: 30, duration: '0:39', year: 2026 },
+        { id: 'rodzina-05-cholewa-polewa', trackNumber: 5, title: 'Cholewa polewa', artist: 'Budowa', albumId: 'rodzina', album: 'RODZINA', cover: '/music/rodzina-cover.jpg', audio: '/music/05-cholewa-polewa.flac', price: 30, duration: '2:10', year: 2026 },
+        { id: 'rodzina-06-tomasz', trackNumber: 6, title: 'Tomasz', artist: 'Budowa', albumId: 'rodzina', album: 'RODZINA', cover: '/music/rodzina-cover.jpg', audio: '/music/06-tomasz.flac', price: 30, duration: '1:51', year: 2026 },
+        { id: 'rodzina-07-chichot-losu', trackNumber: 7, title: 'Chichot losu', artist: 'Budowa', albumId: 'rodzina', album: 'RODZINA', cover: '/music/rodzina-cover.jpg', audio: '/music/07-chichot-losu.flac', price: 30, duration: '4:10', year: 2026 },
+        { id: 'rodzina-08-to-grube', trackNumber: 8, title: 'To grube', artist: 'Budowa', albumId: 'rodzina', album: 'RODZINA', cover: '/music/rodzina-cover.jpg', audio: '/music/08-to-grube.flac', price: 30, duration: '0:47', year: 2026 },
+        { id: 'rodzina-09-ballada-mrozonskiego-mrozona', trackNumber: 9, title: 'Ballada Mrożońskiego Mrożona', artist: 'Budowa', albumId: 'rodzina', album: 'RODZINA', cover: '/music/rodzina-cover.jpg', audio: '/music/09-ballada-mrozonskiego-mrozona.flac', price: 30, duration: '3:28', year: 2026 },
+        { id: 'rodzina-10-bejoe', trackNumber: 10, title: 'beJoe.', artist: 'Budowa', albumId: 'rodzina', album: 'RODZINA', cover: '/music/rodzina-cover.jpg', audio: '/music/10-bejoe.flac', price: 30, duration: '5:40', year: 2026 }
     ]
 };
 
